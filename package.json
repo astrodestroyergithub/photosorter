@@ -1,0 +1,21 @@
+{
+  "name": "photosorter-netlify-neondb",
+  "version": "2.4.0",
+  "description": "Intelligent AI-powered photo organization, deduplication, and semantic sorting platform built for Netlify & Neon Serverless Postgres.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "netlify dev",
+    "deploy": "netlify deploy --prod",
+    "db:init": "psql $DATABASE_URL -f db/schema.sql"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4"
+  },
+  "devDependencies": {
+    "netlify-cli": "^17.36.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

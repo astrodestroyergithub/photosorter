@@ -1,0 +1,2790 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+  <title>PhotoSorter — Intelligent AI Photo Organizer &amp; NeonDB Cloud Studio</title>
+  <meta name="description" content="PhotoSorter is an AI-powered photo organization web app hosted on Netlify and backed by NeonDB Serverless Postgres with pgvector semantic search." />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg-page: #F8FAFC;
+      --bg-surface: #FFFFFF;
+      --bg-subtle: #F1F5F9;
+      --border-light: #E2E8F0;
+      --text-primary: #0F172A;
+      --text-secondary: #475569;
+      --accent-blue: #2563EB;
+      --accent-indigo: #4F46E5;
+      --accent-emerald: #059669;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(180deg, #FFFDF9 0%, #F8FAFC 45%, #F0F7FF 100%);
+      color: var(--text-primary);
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+    .font-mono-code {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* Soft light-themed glassmorphism */
+    .light-glass {
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    /* Custom subtle scrollbars */
+    ::-webkit-scrollbar {
+      width: 7px;
+      height: 7px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F1F5F9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94A3B8;
+    }
+    .photo-card {
+      transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease, border-color 0.2s ease;
+    }
+    .photo-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 14px 28px -8px rgba(37, 99, 235, 0.12), 0 4px 10px -2px rgba(15, 23, 42, 0.05);
+    }
+    @keyframes pulseRing {
+      0% { transform: scale(0.92); opacity: 0.85; }
+      70% { transform: scale(1.35); opacity: 0; }
+      100% { transform: scale(1.35); opacity: 0; }
+    }
+    .map-pin-pulse::after {
+      content: '';
+      position: absolute;
+      inset: -6px;
+      border-radius: 9999px;
+      background: rgba(37, 99, 235, 0.35);
+      animation: pulseRing 2s infinite;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="antialiased selection:bg-blue-100 selection:text-blue-900">
+
+  <!-- Top Announcement & NeonDB + Netlify Telemetry Bar -->
+  <div class="bg-gradient-to-r from-blue-50 via-indigo-50/80 to-emerald-50 border-b border-slate-200/80 text-xs text-slate-700 px-3 sm:px-6 py-2">
+    <div class="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-2">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-semibold bg-emerald-100/90 text-emerald-800 border border-emerald-200">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          NeonDB Serverless Active
+        </span>
+        <span class="hidden sm:inline text-slate-500">|</span>
+        <span class="font-medium text-slate-700">Engine: <strong class="text-slate-900">CLIP-ViT-L/14 + pHash + pgvector (512-d)</strong></span>
+        <span class="hidden md:inline text-slate-500">|</span>
+        <span class="hidden md:inline text-slate-600">Edge Host: <strong class="text-blue-700">Netlify Functions (us-east-2)</strong></span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="topSyncTimestamp" class="text-slate-600 font-mono-code text-[11px]">Pool Latency: 14ms • Synced just now</span>
+        <button id="btnTopQuickPing" type="button" class="text-blue-700 hover:text-blue-900 font-semibold underline decoration-blue-300 underline-offset-2">
+          Verify DB Pool
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sticky Main Header -->
+  <header class="sticky top-0 z-30 light-glass border-b border-slate-200/90 shadow-sm">
+    <div class="max-w-[1600px] mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-3">
+      <!-- Left: Mobile Menu Button + Custom Favicon Logo + Title -->
+      <div class="flex items-center gap-3 min-w-0">
+        <button id="btnMobileMenu" type="button" aria-label="Toggle Navigation Drawer" class="lg:hidden p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+
+        <button id="btnBrandHome" type="button" class="flex items-center gap-2.5 text-left group focus:outline-none">
+          <!-- Inline SVG Matching Root favicon.svg -->
+          <div class="w-10 h-10 rounded-xl shadow-sm border border-slate-200/80 bg-white flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+            <svg viewBox="0 0 64 64" class="w-8 h-8" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="3" y="3" width="58" height="58" rx="16" fill="#F0F7FF" stroke="#CBD5E1" stroke-width="1.5"/>
+              <rect x="11" y="16" width="32" height="28" rx="6" transform="rotate(-10 27 30)" fill="#38BDF8" opacity="0.85"/>
+              <rect x="19" y="15" width="32" height="28" rx="6" transform="rotate(8 35 29)" fill="#FB923C" opacity="0.85"/>
+              <rect x="13" y="17" width="36" height="32" rx="7" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5"/>
+              <rect x="17" y="21" width="28" height="20" rx="4" fill="#EFF6FF"/>
+              <circle cx="24" cy="27" r="3.2" fill="#FBBF24"/>
+              <path d="M17 38 L25 29 L31 35 L37 27 L45 38 L45 41 L17 41 Z" fill="#2563EB"/>
+              <rect x="19" y="44" width="10" height="2.2" rx="1.1" fill="#3B82F6"/>
+              <rect x="31" y="44" width="6" height="2.2" rx="1.1" fill="#10B981"/>
+              <rect x="39" y="44" width="4" height="2.2" rx="1.1" fill="#F59E0B"/>
+              <path d="M49 8 C49 13.5 50.5 15 56 15 C50.5 15 49 16.5 49 22 C49 16.5 47.5 15 42 15 C47.5 15 49 13.5 49 8 Z" fill="#F59E0B"/>
+            </svg>
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900">PhotoSorter</span>
+              <span class="hidden sm:inline-flex items-center px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider rounded-md bg-blue-50 text-blue-700 border border-blue-200">AI Studio 2.4</span>
+            </div>
+            <p class="text-xs text-slate-500 truncate hidden sm:block">Intelligent Photo Arrangement, Deduplication &amp; NeonDB Sync</p>
+          </div>
+        </button>
+      </div>
+
+      <!-- Center: Global Natural Language / AI Semantic Search Bar -->
+      <div class="flex-1 max-w-xl mx-2 hidden md:block">
+        <div class="relative">
+          <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"/>
+          </svg>
+          <input
+            id="globalSearchInput"
+            type="search"
+            placeholder="Magic AI Search: 'golden hour alps', 'puppy', 'Kyoto', 'Sony A7R', 'portrait'..."
+            class="w-full pl-10 pr-24 py-2 text-sm bg-slate-50/90 hover:bg-white focus:bg-white rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-slate-800 placeholder:text-slate-400 transition"
+          />
+          <button id="btnClearSearch" type="button" class="hidden absolute right-14 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 px-1.5 py-0.5">
+            Clear
+          </button>
+          <span class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-mono-code bg-white text-slate-500 border border-slate-200 rounded-md px-1.5 py-0.5">
+            CLIP
+          </span>
+        </div>
+      </div>
+
+      <!-- Right: Primary Action Buttons -->
+      <div class="flex items-center gap-2 shrink-0">
+        <button id="btnRunAiAutoSort" type="button" class="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-sm shadow-blue-500/15 transition active:scale-95">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+          </svg>
+          <span>AI Auto-Sort Chunk</span>
+        </button>
+
+        <button id="btnOpenUploadModal" type="button" class="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 shadow-sm transition">
+          <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+          </svg>
+          <span class="hidden sm:inline">Import Photos</span>
+        </button>
+
+        <button id="btnOpenNeonDrawer" type="button" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-50 hover:bg-emerald-100/80 text-emerald-800 border border-emerald-200 transition" title="Open NeonDB Studio">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span class="hidden xl:inline">NeonDB SQL</span>
+          <span class="xl:hidden">DB</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile Search Input (Visible <768px) -->
+    <div class="md:hidden px-3 pb-2.5">
+      <div class="relative">
+        <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"/>
+        </svg>
+        <input
+          id="mobileSearchInput"
+          type="search"
+          placeholder="Search photos by scene, tag, city, camera..."
+          class="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 focus:bg-white rounded-xl border border-slate-200 focus:border-blue-500 outline-none text-slate-800"
+        />
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace Container -->
+  <div class="max-w-[1600px] mx-auto flex min-h-[calc(100vh-110px)] relative">
+
+    <!-- Mobile Backdrop Overlay -->
+    <div id="mobileSidebarBackdrop" class="fixed inset-0 bg-slate-900/25 backdrop-blur-xs z-40 hidden lg:hidden"></div>
+
+    <!-- Left Navigation Sidebar (Responsive Drawer on Mobile, Sticky Column on Desktop) -->
+    <aside id="mainSidebar" class="fixed lg:sticky top-0 lg:top-[65px] left-0 z-40 w-72 lg:w-64 xl:w-72 h-full lg:h-[calc(100vh-65px)] bg-white/95 lg:bg-white/70 border-r border-slate-200/90 p-4 flex flex-col justify-between overflow-y-auto transition-transform duration-200 -translate-x-full lg:translate-x-0 shrink-0">
+      <div class="space-y-6">
+        <!-- Mobile Drawer Header -->
+        <div class="flex items-center justify-between lg:hidden pb-3 border-b border-slate-200">
+          <span class="font-bold text-slate-900">PhotoSorter Navigation</span>
+          <button id="btnCloseMobileMenu" type="button" class="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Primary Workspace Views -->
+        <div>
+          <p class="px-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">AI Workspaces</p>
+          <nav class="space-y-1" aria-label="Primary Views">
+            <button type="button" data-nav-view="all" class="nav-view-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold bg-blue-50 text-blue-700 border border-blue-200/80 transition">
+              <span class="flex items-center gap-2.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                <span>All HD Photos</span>
+              </span>
+              <span id="badgeCountAll" class="text-xs font-mono-code px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">12</span>
+            </button>
+
+            <button type="button" data-nav-view="sorter" class="nav-view-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-100/80 border border-transparent transition">
+              <span class="flex items-center gap-2.5">
+                <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+                <span>AI Smart Sorter &amp; Rules</span>
+              </span>
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">Neural</span>
+            </button>
+
+            <button type="button" data-nav-view="people" class="nav-view-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-100/80 border border-transparent transition">
+              <span class="flex items-center gap-2.5">
+                <svg class="w-4 h-4 text-pink-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                <span>People &amp; Face Clusters</span>
+              </span>
+              <span id="badgeCountPeople" class="text-xs font-mono-code px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">3</span>
+            </button>
+
+            <button type="button" data-nav-view="cleaner" class="nav-view-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-100/80 border border-transparent transition">
+              <span class="flex items-center gap-2.5">
+                <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                <span>Duplicate &amp; Blur Cleaner</span>
+              </span>
+              <span id="badgeCountCleaner" class="text-xs font-mono-code px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">2 Flags</span>
+            </button>
+
+            <button type="button" data-nav-view="map" class="nav-view-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-100/80 border border-transparent transition">
+              <span class="flex items-center gap-2.5">
+                <svg class="w-4 h-4 text-sky-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                <span>Geo-Location Map</span>
+              </span>
+              <span class="text-xs font-mono-code px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">6 Pins</span>
+            </button>
+
+            <button type="button" data-nav-view="neondb" class="nav-view-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-100/80 border border-transparent transition">
+              <span class="flex items-center gap-2.5">
+                <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
+                <span>NeonDB Cloud Studio</span>
+              </span>
+              <span class="text-[11px] font-mono-code px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">SQL</span>
+            </button>
+          </nav>
+        </div>
+
+        <!-- Smart AI Categories -->
+        <div>
+          <div class="flex items-center justify-between px-2.5 mb-2">
+            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">AI Smart Albums</p>
+            <button id="btnResetCategorySidebar" type="button" class="text-[11px] text-blue-600 hover:underline font-medium">Show All</button>
+          </div>
+          <div class="space-y-1" id="sidebarCategoryList">
+            <button type="button" data-sidebar-cat="Nature & Alps" class="sidebar-cat-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-700 hover:bg-slate-100 transition">
+              <span class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                <span>Nature &amp; Alpine Lakes</span>
+              </span>
+              <span class="font-mono-code text-slate-400" data-cat-count="Nature & Alps">2</span>
+            </button>
+            <button type="button" data-sidebar-cat="People & Portraits" class="sidebar-cat-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-700 hover:bg-slate-100 transition">
+              <span class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-pink-500"></span>
+                <span>People &amp; Portraits</span>
+              </span>
+              <span class="font-mono-code text-slate-400" data-cat-count="People & Portraits">2</span>
+            </button>
+            <button type="button" data-sidebar-cat="Travel & Architecture" class="sidebar-cat-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-700 hover:bg-slate-100 transition">
+              <span class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                <span>Travel &amp; Architecture</span>
+              </span>
+              <span class="font-mono-code text-slate-400" data-cat-count="Travel & Architecture">5</span>
+            </button>
+            <button type="button" data-sidebar-cat="Pets & Wildlife" class="sidebar-cat-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-700 hover:bg-slate-100 transition">
+              <span class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                <span>Pets &amp; Action</span>
+              </span>
+              <span class="font-mono-code text-slate-400" data-cat-count="Pets & Wildlife">2</span>
+            </button>
+            <button type="button" data-sidebar-cat="Culinary" class="sidebar-cat-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-700 hover:bg-slate-100 transition">
+              <span class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+                <span>Culinary &amp; Gastronomy</span>
+              </span>
+              <span class="font-mono-code text-slate-400" data-cat-count="Culinary">1</span>
+            </button>
+            <button type="button" data-sidebar-cat="Favorites" class="sidebar-cat-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-700 hover:bg-slate-100 transition">
+              <span class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                <span>Starred Favorites</span>
+              </span>
+              <span id="sidebarFavCount" class="font-mono-code text-slate-400">5</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Storage & NeonDB Telemetry Card -->
+      <div class="mt-6 p-3.5 rounded-2xl bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50/40 border border-slate-200/90 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-slate-800">NeonDB + R2 Cloud Pool</span>
+          <span id="storagePercentBadge" class="text-[11px] font-mono-code font-semibold text-blue-700">61.8 MB</span>
+        </div>
+        <div class="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
+          <div id="storageProgressBar" class="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-300" style="width: 44%"></div>
+        </div>
+        <div class="flex items-center justify-between text-[11px] text-slate-500">
+          <span id="storageReclaimedText">Reclaimed: 14.2 MB</span>
+          <span>pgvector Indexed</span>
+        </div>
+        <button id="btnSidebarSyncNow" type="button" class="w-full py-1.5 px-3 rounded-xl text-xs font-semibold bg-white hover:bg-blue-50 text-blue-700 border border-slate-200 shadow-2xs transition flex items-center justify-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          <span>Commit State to NeonDB</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 min-w-0 p-3 sm:p-6 lg:p-8 space-y-6">
+
+      <!-- KPI Summary Ribbon -->
+      <section aria-label="Platform Telemetry" class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div class="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-xs flex items-start justify-between">
+          <div>
+            <p class="text-xs font-medium text-slate-500">Total Indexed Photos</p>
+            <p id="kpiTotalPhotos" class="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">12</p>
+            <p class="text-[11px] text-emerald-700 font-medium mt-1">100% EXIF + CLIP Vectorized</p>
+          </div>
+          <div class="p-2.5 rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-xs flex items-start justify-between">
+          <div>
+            <p class="text-xs font-medium text-slate-500">AI Sorting Confidence</p>
+            <p id="kpiAvgConfidence" class="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">98.4%</p>
+            <p class="text-[11px] text-indigo-700 font-medium mt-1">5 Smart Albums • 3 People</p>
+          </div>
+          <div class="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-xs flex items-start justify-between">
+          <div>
+            <p class="text-xs font-medium text-slate-500">Blur &amp; Duplicate Flags</p>
+            <p id="kpiCleanerFlags" class="text-2xl sm:text-3xl font-extrabold text-amber-600 mt-1">2</p>
+            <p id="kpiCleanerSubtext" class="text-[11px] text-amber-700 font-medium mt-1">8.7 MB Ready to Reclaim</p>
+          </div>
+          <div class="p-2.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-xs flex items-start justify-between">
+          <div>
+            <p class="text-xs font-medium text-slate-500">NeonDB Query Latency</p>
+            <p id="kpiNeonLatency" class="text-2xl sm:text-3xl font-extrabold text-emerald-600 mt-1">14 ms</p>
+            <p class="text-[11px] text-slate-500 font-mono-code mt-1">ep-bright-meadow-pooler</p>
+          </div>
+          <div class="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"/></svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- Live AI Auto-Sorting Progress Banner (Hidden until triggered) -->
+      <div id="aiSortingBanner" class="hidden bg-gradient-to-r from-blue-50 via-indigo-50 to-sky-50 border border-blue-200 rounded-2xl p-4 shadow-xs">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center animate-spin">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            </div>
+            <div>
+              <h3 id="aiSortingStepTitle" class="text-sm font-bold text-slate-900">Running Neural Photo Classification &amp; pHash Deduplication...</h3>
+              <p id="aiSortingStepSub" class="text-xs text-slate-600">Extracting EXIF metadata, computing 512-d CLIP embeddings, and syncing rows to NeonDB...</p>
+            </div>
+          </div>
+          <span id="aiSortingPercent" class="text-sm font-mono-code font-bold text-blue-700">0%</span>
+        </div>
+        <div class="w-full h-2.5 bg-white rounded-full overflow-hidden border border-blue-100">
+          <div id="aiSortingBar" class="h-full bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-500 transition-all duration-200" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- VIEW 1: ALL HD PHOTOS & SMART GALLERY                              -->
+      <!-- ================================================================== -->
+      <section id="view-all" class="workspace-view space-y-5">
+        <!-- Filter & Sorting Toolbar -->
+        <div class="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/90 shadow-xs space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <!-- Category Filter Pills -->
+            <div class="flex items-center gap-1.5 flex-wrap" id="categoryFilterBar">
+              <button type="button" data-cat="all" class="cat-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-600 text-white shadow-2xs transition">All Photos</button>
+              <button type="button" data-cat="Nature & Alps" class="cat-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">Nature &amp; Alps</button>
+              <button type="button" data-cat="People & Portraits" class="cat-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">People &amp; Portraits</button>
+              <button type="button" data-cat="Travel & Architecture" class="cat-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">Travel &amp; Architecture</button>
+              <button type="button" data-cat="Pets & Wildlife" class="cat-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">Pets &amp; Action</button>
+              <button type="button" data-cat="Culinary" class="cat-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">Culinary</button>
+              <button type="button" data-cat="Favorites" class="cat-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">★ Favorites</button>
+            </div>
+
+            <!-- Right Controls: Sort Dropdown & Grid Layout Density -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <label for="sortOrderSelect" class="text-xs font-medium text-slate-500">Sort by:</label>
+              <select id="sortOrderSelect" class="text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-slate-800 focus:outline-none focus:border-blue-500">
+                <option value="aesthetic">AI Aesthetic Score (High → Low)</option>
+                <option value="newest">Captured Date (Newest First)</option>
+                <option value="sharpness">Sharpness Index (Crispest First)</option>
+                <option value="confidence">AI Confidence %</option>
+                <option value="size">File Size (Largest First)</option>
+              </select>
+
+              <div class="inline-flex rounded-xl bg-slate-100 p-0.5 border border-slate-200" role="group" aria-label="Grid Density">
+                <button type="button" id="btnGridComfortable" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-slate-800 shadow-2xs transition">Grid</button>
+                <button type="button" id="btnGridCompact" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition">Compact</button>
+                <button type="button" id="btnGridList" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition">Table</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Filter / Batch Selection Sub-bar -->
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span id="galleryStatusCount" class="font-semibold text-slate-700">Showing all 12 HD photos</span>
+              <span id="activeFilterChip" class="hidden items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">
+                <span id="activeFilterText">Filter</span>
+                <button id="btnClearActiveFilter" type="button" class="ml-1 text-blue-500 hover:text-blue-800 font-bold">×</button>
+              </span>
+            </div>
+
+            <!-- Batch Selection Actions -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <button id="btnSelectAllPhotos" type="button" class="text-slate-600 hover:text-blue-700 font-medium">Select All Visible</button>
+              <span class="text-slate-300">|</span>
+              <button id="btnBatchFavorite" type="button" class="text-slate-600 hover:text-rose-600 font-medium">★ Star Selected</button>
+              <span class="text-slate-300">|</span>
+              <button id="btnExportMetadataJson" type="button" class="text-blue-600 hover:text-blue-800 font-semibold">Export JSON Snapshot</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dynamic Photo Gallery Grid -->
+        <div id="photoGalleryContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5"></div>
+      </section>
+
+      <!-- ================================================================== -->
+      <!-- VIEW 2: AI SMART SORTER & AUTO-ROUTING RULES ENGINE                -->
+      <!-- ================================================================== -->
+      <section id="view-sorter" class="workspace-view hidden space-y-6">
+        <div class="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/90 shadow-xs">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-100">
+            <div>
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                Neural Vision Pipeline v2.4
+              </span>
+              <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 mt-1">AI Smart Sorter &amp; Automated Album Rules</h2>
+              <p class="text-sm text-slate-600 mt-0.5">Configure how PhotoSorter classifies incoming random photo chunks using CLIP vectors, EXIF telemetry, and NeonDB triggers.</p>
+            </div>
+            <div class="flex items-center gap-2.5">
+              <button id="btnSorterTriggerBatch" type="button" class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition">
+                Re-Evaluate All Photos with AI
+              </button>
+              <button id="btnOpenNewRuleModal" type="button" class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 transition">
+                + Create Smart Rule
+              </button>
+            </div>
+          </div>
+
+          <!-- AI Confidence & Threshold Sliders -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 py-5 border-b border-slate-100">
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
+              <div class="flex items-center justify-between text-xs font-bold text-slate-700 mb-1.5">
+                <label for="sliderConfidence">Minimum AI Tag Confidence</label>
+                <span id="valSliderConfidence" class="font-mono-code text-blue-700">88%</span>
+              </div>
+              <input id="sliderConfidence" type="range" min="70" max="99" value="88" class="w-full accent-blue-600 cursor-pointer" />
+              <p class="text-[11px] text-slate-500 mt-1">Tags scoring above threshold are auto-committed to NeonDB `ai_tags`.</p>
+            </div>
+
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
+              <div class="flex items-center justify-between text-xs font-bold text-slate-700 mb-1.5">
+                <label for="sliderSharpness">Laplacian Blur Cutoff</label>
+                <span id="valSliderSharpness" class="font-mono-code text-amber-700">45.0</span>
+              </div>
+              <input id="sliderSharpness" type="range" min="20" max="80" value="45" class="w-full accent-amber-600 cursor-pointer" />
+              <p class="text-[11px] text-slate-500 mt-1">Photos below this sharpness index are flagged for the Blur Cleaner.</p>
+            </div>
+
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
+              <div class="flex items-center justify-between text-xs font-bold text-slate-700 mb-1.5">
+                <label for="sliderPhash">pHash Duplicate Sensitivity</label>
+                <span id="valSliderPhash" class="font-mono-code text-emerald-700">95%</span>
+              </div>
+              <input id="sliderPhash" type="range" min="80" max="99" value="95" class="w-full accent-emerald-600 cursor-pointer" />
+              <p class="text-[11px] text-slate-500 mt-1">Hamming distance threshold for grouping burst shots &amp; near-duplicates.</p>
+            </div>
+          </div>
+
+          <!-- Active Smart Sorting Rules List -->
+          <div class="mt-5">
+            <h3 class="text-sm font-bold text-slate-800 mb-3">Active Automated Sorting Rules (Synced to `smart_rules` table)</h3>
+            <div id="smartRulesList" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+          </div>
+        </div>
+
+        <!-- Analytics Charts Row (Fixed height containers as required) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div class="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <h3 class="text-sm font-bold text-slate-900">AI Semantic Category Distribution</h3>
+                <p class="text-xs text-slate-500">Live breakdown across NeonDB `photos.category`</p>
+              </div>
+              <span class="text-xs font-mono-code text-slate-400">GROUP BY category</span>
+            </div>
+            <div class="relative h-64 w-full">
+              <canvas id="chartCategories"></canvas>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <h3 class="text-sm font-bold text-slate-900">Aesthetic Score vs. Sharpness Telemetry</h3>
+                <p class="text-xs text-slate-500">Identifies top portfolio shots vs. blurry burst outliers</p>
+              </div>
+              <span class="text-xs font-mono-code text-slate-400">CLIP + Laplacian</span>
+            </div>
+            <div class="relative h-64 w-full">
+              <canvas id="chartQuality"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================== -->
+      <!-- VIEW 3: PEOPLE & AI FACE CLUSTERS                                  -->
+      <!-- ================================================================== -->
+      <section id="view-people" class="workspace-view hidden space-y-5">
+        <div class="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/90 shadow-xs">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-slate-100">
+            <div>
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-pink-50 text-pink-700 border border-pink-200">
+                ArcFace + PetBiometrics 512-d
+              </span>
+              <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 mt-1">People &amp; Pet Recognition Clusters</h2>
+              <p class="text-sm text-slate-600 mt-0.5">Click any recognized cluster to filter their HD photos, or rename a cluster to update NeonDB `people_clusters`.</p>
+            </div>
+          </div>
+
+          <div id="peopleClustersGrid" class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5"></div>
+        </div>
+      </section>
+
+      <!-- ================================================================== -->
+      <!-- VIEW 4: AI DUPLICATE & BLUR CLEANER                                -->
+      <!-- ================================================================== -->
+      <section id="view-cleaner" class="workspace-view hidden space-y-5">
+        <div class="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/90 shadow-xs">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
+            <div>
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                Perceptual Hash (pHash) + Blur Detector
+              </span>
+              <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 mt-1">AI Duplicate &amp; Motion-Blur Cleaner</h2>
+              <p class="text-sm text-slate-600 mt-0.5">Review side-by-side burst shots and out-of-focus captures. Keep the crispest master image and archive redundant copies.</p>
+            </div>
+            <button id="btnResolveAllDuplicates" type="button" class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition shrink-0">
+              ✨ Auto-Clean All Flagged Shots
+            </button>
+          </div>
+
+          <div id="cleanerPairsContainer" class="space-y-5 mt-5"></div>
+        </div>
+      </section>
+
+      <!-- ================================================================== -->
+      <!-- VIEW 5: INTERACTIVE GEO-LOCATION PHOTO MAP                         -->
+      <!-- ================================================================== -->
+      <section id="view-map" class="workspace-view hidden space-y-5">
+        <div class="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/90 shadow-xs space-y-5">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+                EXIF GPS Spatial Index
+              </span>
+              <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 mt-1">Global Geo-Location Photo Atlas</h2>
+              <p class="text-sm text-slate-600 mt-0.5">Select any GPS cluster pin on the light vector map to inspect photos captured at that location.</p>
+            </div>
+            <button id="btnMapShowAllLocations" type="button" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition self-start sm:self-auto">
+              Show All Global Locations
+            </button>
+          </div>
+
+          <!-- Interactive Light Vector World Map with Clickable GPS Pins -->
+          <div class="relative w-full rounded-2xl overflow-hidden border border-slate-200 bg-gradient-to-b from-sky-50 via-blue-50/40 to-emerald-50/30 p-3 sm:p-5">
+            <svg viewBox="0 0 1000 460" class="w-full h-auto max-h-[380px] select-none" aria-label="Interactive Global Photo Map">
+              <!-- Subtle Latitude / Longitude Grid Lines -->
+              <g stroke="#CBD5E1" stroke-width="0.6" stroke-dasharray="4 4" opacity="0.7">
+                <line x1="0" y1="115" x2="1000" y2="115"/>
+                <line x1="0" y1="230" x2="1000" y2="230"/>
+                <line x1="0" y1="345" x2="1000" y2="345"/>
+                <line x1="250" y1="0" x2="250" y2="460"/>
+                <line x1="500" y1="0" x2="500" y2="460"/>
+                <line x1="750" y1="0" x2="750" y2="460"/>
+              </g>
+              <!-- Stylized Light Continental Landmasses -->
+              <g fill="#E2E8F0" stroke="#94A3B8" stroke-width="1">
+                <!-- North America -->
+                <path d="M95,75 L235,65 L285,140 L235,220 L155,215 L105,150 Z" rx="12"/>
+                <!-- South America -->
+                <path d="M245,250 L315,265 L330,365 L280,425 L245,355 Z"/>
+                <!-- Europe -->
+                <path d="M440,70 L565,65 L580,155 L465,168 L435,125 Z"/>
+                <!-- Africa -->
+                <path d="M450,185 L565,185 L590,305 L530,390 L470,315 Z"/>
+                <!-- Asia -->
+                <path d="M585,65 L855,75 L885,215 L745,255 L605,180 Z"/>
+                <!-- Australia -->
+                <path d="M770,315 L895,310 L905,395 L790,405 Z"/>
+              </g>
+            </svg>
+
+            <!-- Interactive HTML Pin Overlays -->
+            <button type="button" data-map-loc="Zermatt, Swiss Alps" style="left: 49.5%; top: 28%;" class="map-pin-btn map-pin-pulse absolute -translate-x-1/2 -translate-y-1/2 px-2.5 py-1 rounded-full bg-blue-600 text-white text-[11px] font-bold shadow-md hover:scale-110 transition flex items-center gap-1">
+              <span>🏔️ Swiss Alps</span>
+              <span class="px-1.5 rounded-full bg-white/20">2</span>
+            </button>
+
+            <button type="button" data-map-loc="Amalfi Coast, Italy" style="left: 52.5%; top: 36%;" class="map-pin-btn map-pin-pulse absolute -translate-x-1/2 -translate-y-1/2 px-2.5 py-1 rounded-full bg-indigo-600 text-white text-[11px] font-bold shadow-md hover:scale-110 transition flex items-center gap-1">
+              <span>🌊 Amalfi</span>
+              <span class="px-1.5 rounded-full bg-white/20">2</span>
+            </button>
+
+            <button type="button" data-map-loc="Kyoto, Japan" style="left: 84.5%; top: 34%;" class="map-pin-btn map-pin-pulse absolute -translate-x-1/2 -translate-y-1/2 px-2.5 py-1 rounded-full bg-pink-600 text-white text-[11px] font-bold shadow-md hover:scale-110 transition flex items-center gap-1">
+              <span>🌸 Kyoto</span>
+              <span class="px-1.5 rounded-full bg-white/20">2</span>
+            </button>
+
+            <button type="button" data-map-loc="San Francisco, CA" style="left: 16.5%; top: 34%;" class="map-pin-btn map-pin-pulse absolute -translate-x-1/2 -translate-y-1/2 px-2.5 py-1 rounded-full bg-emerald-600 text-white text-[11px] font-bold shadow-md hover:scale-110 transition flex items-center gap-1">
+              <span>🌿 SF / Meadow</span>
+              <span class="px-1.5 rounded-full bg-white/20">4</span>
+            </button>
+
+            <button type="button" data-map-loc="Paris, France" style="left: 46.2%; top: 23%;" class="map-pin-btn map-pin-pulse absolute -translate-x-1/2 -translate-y-1/2 px-2.5 py-1 rounded-full bg-amber-600 text-white text-[11px] font-bold shadow-md hover:scale-110 transition flex items-center gap-1">
+              <span>🥐 Paris</span>
+              <span class="px-1.5 rounded-full bg-white/20">1</span>
+            </button>
+
+            <button type="button" data-map-loc="Melbourne Coast, AU" style="left: 84.0%; top: 78%;" class="map-pin-btn map-pin-pulse absolute -translate-x-1/2 -translate-y-1/2 px-2.5 py-1 rounded-full bg-sky-600 text-white text-[11px] font-bold shadow-md hover:scale-110 transition flex items-center gap-1">
+              <span>🏛️ Melbourne</span>
+              <span class="px-1.5 rounded-full bg-white/20">1</span>
+            </button>
+          </div>
+
+          <!-- Selected Location Photos Grid -->
+          <div>
+            <h3 id="mapSelectedLocationTitle" class="text-sm font-bold text-slate-800 mb-3">All Geo-Tagged Photographs (12)</h3>
+            <div id="mapPhotosGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================== -->
+      <!-- VIEW 6: NEONDB SERVERLESS POSTGRES CLOUD STUDIO                    -->
+      <!-- ================================================================== -->
+      <section id="view-neondb" class="workspace-view hidden space-y-6">
+        <div class="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/90 shadow-xs space-y-5">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  @neondatabase/serverless v0.10.4
+                </span>
+                <span class="text-xs font-mono-code text-slate-500">PostgreSQL 16.4 + pgvector 0.7.4</span>
+              </div>
+              <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 mt-1">NeonDB Serverless Postgres &amp; Netlify Edge Console</h2>
+              <p class="text-sm text-slate-600 mt-0.5">Inspect and test your pooled NeonDB connection, run live SQL queries against the photo catalog, or copy the production schema &amp; serverless functions.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button id="btnTestNeonConnection" type="button" class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition">
+                ⚡ Ping NeonDB Pooler
+              </button>
+            </div>
+          </div>
+
+          <!-- Connection String & Environment Configuration -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div class="lg:col-span-2 p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <label for="neonConnectionStringInput" class="block text-xs font-bold text-slate-700">Neon Pooled Connection URI (`DATABASE_URL` in Netlify Env)</label>
+              <div class="flex flex-col sm:flex-row gap-2">
+                <input
+                  id="neonConnectionStringInput"
+                  type="text"
+                  value="postgresql://neondb_owner:npg_9xK4mLp2vQrT@ep-bright-meadow-a54321-pooler.us-east-2.aws.neon.tech/photosorter?sslmode=require"
+                  class="flex-1 px-3 py-2 rounded-xl text-xs font-mono-code bg-white border border-slate-200 text-slate-800 focus:outline-none focus:border-emerald-500"
+                />
+                <button id="btnCopyConnString" type="button" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
+                  Copy URI
+                </button>
+              </div>
+              <p class="text-[11px] text-slate-500">Configured for HTTP/WebSocket stateless edge queries inside `netlify/functions/photos.js`.</p>
+            </div>
+
+            <div class="p-4 rounded-xl bg-emerald-50/60 border border-emerald-200/80 flex flex-col justify-between">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-emerald-950">Connection Telemetry</span>
+                <span id="neonStatusBadge" class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">HEALTHY</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2 my-2 text-xs">
+                <div>
+                  <span class="text-slate-500 block text-[11px]">Cold Start / HTTP</span>
+                  <strong id="neonPingValue" class="font-mono-code text-slate-900">14 ms</strong>
+                </div>
+                <div>
+                  <span class="text-slate-500 block text-[11px]">Active Rows</span>
+                  <strong id="neonRowCountValue" class="font-mono-code text-slate-900">12 photos</strong>
+                </div>
+              </div>
+              <p class="text-[11px] text-emerald-800 font-mono-code truncate">Branch: main (aws-us-east-2)</p>
+            </div>
+          </div>
+
+          <!-- Interactive Live SQL Query Runner -->
+          <div class="space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <label for="sqlQueryTextarea" class="text-xs font-bold uppercase tracking-wider text-slate-500">Interactive SQL Runner (Executes against live PhotoSorter catalog)</label>
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <button type="button" data-sql-preset="top_aesthetic" class="sql-preset-btn px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 transition">Top Aesthetic Photos</button>
+                <button type="button" data-sql-preset="group_category" class="sql-preset-btn px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 transition">Category Summary</button>
+                <button type="button" data-sql-preset="flagged_cleanup" class="sql-preset-btn px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 transition">Blur &amp; Duplicate Flags</button>
+                <button type="button" data-sql-preset="vector_similarity" class="sql-preset-btn px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 transition">pgvector Semantic Match</button>
+              </div>
+            </div>
+
+            <div class="relative">
+              <textarea
+                id="sqlQueryTextarea"
+                rows="3"
+                class="w-full p-3.5 rounded-xl font-mono-code text-xs bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500 outline-none"
+              >SELECT id, filename, title, category, aesthetic_score, sharpness_score, ai_confidence FROM photos WHERE is_archived = FALSE ORDER BY aesthetic_score DESC LIMIT 8;</textarea>
+              <button id="btnExecuteSql" type="button" class="mt-2 sm:mt-0 sm:absolute sm:right-3 sm:bottom-3 px-4 py-1.5 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
+                ▶ Run SQL Query
+              </button>
+            </div>
+
+            <!-- SQL Result Table Output -->
+            <div class="rounded-xl border border-slate-200 overflow-hidden bg-white">
+              <div class="bg-slate-50 px-4 py-2 border-b border-slate-200 flex items-center justify-between text-xs text-slate-600">
+                <span id="sqlResultMeta" class="font-mono-code">Query Results (8 rows • 11 ms)</span>
+                <span class="font-mono-code text-[11px] text-emerald-700">HTTP 200 OK via @neondatabase/serverless</span>
+              </div>
+              <div class="overflow-x-auto max-h-72">
+                <table class="w-full text-left border-collapse text-xs">
+                  <thead id="sqlResultThead" class="bg-slate-100/80 text-slate-700 font-mono-code border-b border-slate-200"></thead>
+                  <tbody id="sqlResultTbody" class="divide-y divide-slate-100 font-mono-code text-slate-800"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Production Schema & Serverless Function Code Viewer -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-3 border-t border-slate-100">
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-800 font-mono-code">db/schema.sql (Neon Postgres + pgvector)</span>
+                <button id="btnCopySchemaSql" type="button" class="text-xs font-semibold text-blue-600 hover:text-blue-800">Copy SQL</button>
+              </div>
+              <pre id="schemaSqlCodeBlock" class="text-[11px] font-mono-code text-slate-700 bg-white p-3 rounded-lg border border-slate-200 overflow-x-auto max-h-56 leading-relaxed">CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "vector";
+
+CREATE TABLE IF NOT EXISTS photos (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  filename VARCHAR(255) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  category VARCHAR(64) NOT NULL,
+  captured_at TIMESTAMPTZ DEFAULT NOW(),
+  location_name VARCHAR(180),
+  camera_model VARCHAR(120),
+  ai_tags TEXT[] DEFAULT '{}',
+  ai_confidence DECIMAL(5,2) DEFAULT 98.40,
+  aesthetic_score DECIMAL(4,1) DEFAULT 9.2,
+  sharpness_score DECIMAL(5,1) DEFAULT 94.0,
+  phash VARCHAR(64) NOT NULL,
+  is_blurry BOOLEAN DEFAULT FALSE,
+  is_duplicate BOOLEAN DEFAULT FALSE,
+  is_favorite BOOLEAN DEFAULT FALSE,
+  clip_embedding vector(512)
+);</pre>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-800 font-mono-code">netlify/functions/photos.js (Serverless Handler)</span>
+                <button id="btnCopyServerlessJs" type="button" class="text-xs font-semibold text-blue-600 hover:text-blue-800">Copy Handler</button>
+              </div>
+              <pre id="serverlessJsCodeBlock" class="text-[11px] font-mono-code text-slate-700 bg-white p-3 rounded-lg border border-slate-200 overflow-x-auto max-h-56 leading-relaxed">import { neon } from '@neondatabase/serverless';
+
+export default async (req) =&gt; {
+  const sql = neon(process.env.DATABASE_URL);
+  if (req.method === 'GET') {
+    const rows = await sql`
+      SELECT * FROM photos
+      WHERE is_archived = FALSE
+      ORDER BY captured_at DESC LIMIT 200
+    `;
+    return Response.json({ ok: true, photos: rows });
+  }
+  if (req.method === 'POST') {
+    const b = await req.json();
+    const res = await sql`
+      INSERT INTO photos (filename, title, category, phash)
+      VALUES (${b.filename}, ${b.title}, ${b.category}, ${b.phash})
+      RETURNING *
+    `;
+    return Response.json({ ok: true, photo: res[0] }, { status: 201 });
+  }
+};</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- PHOTO LIGHTBOX & EXIF / AI METADATA INSPECTOR MODAL                  -->
+  <!-- ==================================================================== -->
+  <div id="photoInspectorModal" class="fixed inset-0 z-50 hidden bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-2 sm:p-6 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="inspectorPhotoTitle">
+    <div class="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-5xl w-full overflow-hidden my-auto">
+      <!-- Modal Top Header -->
+      <div class="px-4 sm:px-6 py-3.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span id="inspectorCategoryBadge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800">Category</span>
+          <h3 id="inspectorPhotoTitle" class="text-base sm:text-lg font-extrabold text-slate-900 truncate">Photo Title</h3>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button id="btnInspectorPrev" type="button" class="p-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold" title="Previous Photo">← Prev</button>
+          <button id="btnInspectorNext" type="button" class="p-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold" title="Next Photo">Next →</button>
+          <button id="btnCloseInspectorModal" type="button" class="p-2 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-800 font-bold text-xs">✕ Close</button>
+        </div>
+      </div>
+
+      <!-- Modal Body: Left HD Image Preview, Right EXIF + AI + NeonDB Inspector -->
+      <div class="grid grid-cols-1 lg:grid-cols-12">
+        <div class="lg:col-span-7 bg-slate-100/70 p-4 sm:p-6 flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-slate-200">
+          <div class="relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <img id="inspectorImageEl" src="assets/photos/alps_lake.jpg" alt="Selected HD Photograph" class="w-full h-auto max-h-[460px] object-cover" />
+          </div>
+          <!-- Extracted Dominant Color Swatches & Quick Actions -->
+          <div class="w-full flex flex-wrap items-center justify-between gap-3 mt-4">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-medium text-slate-500">Dominant Palette:</span>
+              <div id="inspectorColorSwatches" class="flex items-center gap-1.5"></div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button id="btnInspectorToggleFav" type="button" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-rose-50 text-slate-700 border border-slate-200 transition">
+                ★ Favorite
+              </button>
+              <button id="btnInspectorDeletePhoto" type="button" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition">
+                Delete Row
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Detailed EXIF, AI Semantic Tags & Category Editor -->
+        <div class="lg:col-span-5 p-4 sm:p-6 space-y-4 max-h-[540px] overflow-y-auto">
+          <div>
+            <label for="inspectorEditCategory" class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Reassign Smart Category (Updates NeonDB)</label>
+            <select id="inspectorEditCategory" class="w-full px-3 py-2 rounded-xl text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-800">
+              <option value="Nature & Alps">Nature &amp; Alps</option>
+              <option value="People & Portraits">People &amp; Portraits</option>
+              <option value="Travel & Architecture">Travel &amp; Architecture</option>
+              <option value="Pets & Wildlife">Pets &amp; Wildlife</option>
+              <option value="Culinary">Culinary</option>
+            </select>
+          </div>
+
+          <!-- AI Telemetry Scores -->
+          <div class="grid grid-cols-3 gap-2.5">
+            <div class="p-2.5 rounded-xl bg-blue-50/70 border border-blue-100 text-center">
+              <span class="text-[11px] text-slate-500 block">AI Confidence</span>
+              <strong id="inspectorConfidenceVal" class="text-sm font-extrabold text-blue-700">99.2%</strong>
+            </div>
+            <div class="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-100 text-center">
+              <span class="text-[11px] text-slate-500 block">Aesthetic</span>
+              <strong id="inspectorAestheticVal" class="text-sm font-extrabold text-emerald-700">9.7 / 10</strong>
+            </div>
+            <div class="p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-100 text-center">
+              <span class="text-[11px] text-slate-500 block">Sharpness</span>
+              <strong id="inspectorSharpnessVal" class="text-sm font-extrabold text-indigo-700">97.4</strong>
+            </div>
+          </div>
+
+          <!-- AI Vision Caption -->
+          <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">AI Neural Vision Caption</span>
+            <p id="inspectorAiCaption" class="text-xs text-slate-700 leading-relaxed"></p>
+          </div>
+
+          <!-- AI Semantic Tags + Add Tag Input -->
+          <div>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">AI Semantic Tags (`photos.ai_tags`)</span>
+            <div id="inspectorTagsList" class="flex flex-wrap gap-1.5 mb-2"></div>
+            <div class="flex gap-1.5">
+              <input id="inspectorNewTagInput" type="text" placeholder="Add custom AI tag..." class="flex-1 px-2.5 py-1.5 rounded-lg text-xs bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 outline-none" />
+              <button id="btnInspectorAddTag" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white">+ Tag</button>
+            </div>
+          </div>
+
+          <!-- Camera EXIF Metadata Grid -->
+          <div>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">EXIF &amp; NeonDB Record Metadata</span>
+            <div id="inspectorExifGrid" class="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-3 rounded-xl border border-slate-200 font-mono-code"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- IMPORT / UPLOAD RANDOM PHOTOS MODAL                                  -->
+  <!-- ==================================================================== -->
+  <div id="uploadModal" class="fixed inset-0 z-50 hidden bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="uploadModalHeading">
+    <div class="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 id="uploadModalHeading" class="text-lg font-extrabold text-slate-900">Import &amp; AI Auto-Sort Photos</h3>
+          <p class="text-xs text-slate-500">Upload local images from your device or simulate a random raw camera roll chunk.</p>
+        </div>
+        <button id="btnCloseUploadModal" type="button" class="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold">✕</button>
+      </div>
+
+      <label for="fileUploadInput" class="flex flex-col items-center justify-center border-2 border-dashed border-blue-300 hover:border-blue-500 rounded-2xl p-6 bg-blue-50/40 hover:bg-blue-50/80 cursor-pointer transition text-center">
+        <svg class="w-10 h-10 text-blue-600 mb-2" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+        </svg>
+        <span class="text-sm font-bold text-slate-800">Click to select HD photos from your device</span>
+        <span class="text-xs text-slate-500 mt-1">Supports JPEG, PNG, WebP, HEIC • Instant CLIP &amp; EXIF extraction</span>
+        <input id="fileUploadInput" type="file" accept="image/*" multiple class="hidden" />
+      </label>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
+        <button id="btnModalSimulateChunk" type="button" class="w-full py-2.5 px-4 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-sm transition">
+          ⚡ Simulate Random Chunk + AI Sort
+        </button>
+        <button id="btnCancelUploadModal" type="button" class="w-full py-2.5 px-4 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- CREATE SMART SORTING RULE MODAL                                      -->
+  <!-- ==================================================================== -->
+  <div id="newRuleModal" class="fixed inset-0 z-50 hidden bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="newRuleModalHeading">
+    <div class="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 id="newRuleModalHeading" class="text-lg font-extrabold text-slate-900">Create AI Auto-Sorting Rule</h3>
+        <button id="btnCloseNewRuleModal" type="button" class="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label for="inputRuleName" class="block font-bold text-slate-700 mb-1">Rule Name</label>
+          <input id="inputRuleName" type="text" placeholder="e.g., Golden Hour Masterpieces" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800" />
+        </div>
+        <div>
+          <label for="inputRuleCondition" class="block font-bold text-slate-700 mb-1">AI / EXIF Trigger Condition</label>
+          <input id="inputRuleCondition" type="text" placeholder="e.g., Aesthetic >= 9.4 AND Tag IN ('sunset', 'alps')" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800" />
+        </div>
+        <div>
+          <label for="inputRuleTargetAlbum" class="block font-bold text-slate-700 mb-1">Target Smart Album</label>
+          <select id="inputRuleTargetAlbum" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800">
+            <option value="Nature & Alps">Nature &amp; Alps</option>
+            <option value="People & Portraits">People &amp; Portraits</option>
+            <option value="Travel & Architecture">Travel &amp; Architecture</option>
+            <option value="Pets & Wildlife">Pets &amp; Wildlife</option>
+            <option value="Culinary">Culinary</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button id="btnSaveNewRule" type="button" class="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white">Save &amp; Sync to NeonDB</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Non-blocking Toast Notification Container -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+  <!-- ==================================================================== -->
+  <!-- APPLICATION JAVASCRIPT                                               -->
+  <!-- ==================================================================== -->
+  <script>
+    (function () {
+      'use strict';
+
+      // Initial Realistic HD Photo Catalog (12 HD Photographs with EXIF, pHash, CLIP tags & GPS)
+      const INITIAL_PHOTOS = [
+        {
+          id: 'ps-101',
+          filename: 'IMG_8841_Zermatt_Lake.RAW.jpg',
+          title: 'Crystal Alpine Lake at Golden Hour',
+          src: 'assets/photos/alps_lake.jpg',
+          category: 'Nature & Alps',
+          personId: null,
+          capturedAt: '2026-10-14 17:42',
+          location: 'Zermatt, Swiss Alps',
+          coords: '45.9763° N, 7.6586° E',
+          camera: 'Sony A7R V',
+          lens: 'FE 24-70mm F2.8 GM II',
+          aperture: 'f/2.8',
+          shutter: '1/320s',
+          iso: 100,
+          sizeMb: 6.8,
+          confidence: 99.4,
+          aesthetic: 9.8,
+          sharpness: 98.2,
+          phash: 'f8c492e1a4b27109',
+          isDuplicate: false,
+          isBlurry: false,
+          isFavorite: true,
+          selected: false,
+          colors: ['#0F52BA', '#E69A58', '#2C493E', '#93C5FD'],
+          tags: ['alps', 'mountain', 'lake', 'golden-hour', 'reflection', 'landscape'],
+          caption: 'Ultra-crisp alpine tarn reflecting snow-dusted Swiss peaks under warm golden-hour alpenglow.'
+        },
+        {
+          id: 'ps-102',
+          filename: 'DSC_0419_Botanical_Elena.jpg',
+          title: 'Elena in Sunlit Botanical Conservatory',
+          src: 'assets/photos/portrait_elena.jpg',
+          category: 'People & Portraits',
+          personId: 'person-elena',
+          capturedAt: '2026-10-18 10:15',
+          location: 'San Francisco, CA',
+          coords: '37.7694° N, 122.4662° W',
+          camera: 'Canon EOS R5',
+          lens: 'RF 85mm F1.2 L USM',
+          aperture: 'f/1.4',
+          shutter: '1/800s',
+          iso: 160,
+          sizeMb: 5.4,
+          confidence: 99.6,
+          aesthetic: 9.6,
+          sharpness: 97.1,
+          phash: 'b29170c4e81253a1',
+          isDuplicate: false,
+          isBlurry: false,
+          isFavorite: true,
+          selected: false,
+          colors: ['#D6C7B2', '#4D6A36', '#F5E6C8', '#7D5A3C'],
+          tags: ['portrait', 'elena', 'smile', 'botanical', 'bokeh', 'natural-light'],
+          caption: 'Natural-light portrait of Elena Rostova with creamy 85mm prime bokeh in a sunlit greenhouse.'
+        },
+        {
+          id: 'ps-103',
+          filename: 'AMALFI_2209_Positano_Cliff.jpg',
+          title: 'Positano Cliffside Villas & Azure Sea',
+          src: 'assets/photos/amalfi_coast.jpg',
+          category: 'Travel & Architecture',
+          personId: null,
+          capturedAt: '2026-09-28 13:20',
+          location: 'Amalfi Coast, Italy',
+          coords: '40.6281° N, 14.4850° E',
+          camera: 'Leica Q3',
+          lens: 'Summilux 28mm f/1.7 ASPH',
+          aperture: 'f/5.6',
+          shutter: '1/1000s',
+          iso: 100,
+          sizeMb: 7.2,
+          confidence: 99.1,
+          aesthetic: 9.7,
+          sharpness: 97.8,
+          phash: 'd471a8329c1104ef',
+          isDuplicate: false,
+          isBlurry: false,
+          isFavorite: true,
+          selected: false,
+          colors: ['#0284C7', '#EAB308', '#15803D', '#F8FAFC'],
+          tags: ['italy', 'amalfi', 'coast', 'mediterranean', 'villages', 'summer'],
+          caption: 'Sun-drenched Mediterranean cliffside architecture overlooking yachts on the Tyrrhenian Sea.'
+        },
+        {
+          id: 'ps-104',
+          filename: 'IMG_5102_Barnaby_Meadow.jpg',
+          title: 'Barnaby Sprinting Through Wildflower Meadow',
+          src: 'assets/photos/golden_puppy.jpg',
+          category: 'Pets & Wildlife',
+          personId: 'person-barnaby',
+          capturedAt: '2026-10-21 15:08',
+          location: 'San Francisco, CA',
+          coords: '37.7989° N, 122.4662° W',
+          camera: 'Sony A9 III',
+          lens: 'FE 70-200mm F2.8 GM OSS II',
+          aperture: 'f/2.8',
+          shutter: '1/4000s',
+          iso: 250,
+          sizeMb: 4.9,
+          confidence: 99.3,
+          aesthetic: 9.5,
+          sharpness: 96.4,
+          phash: 'c9183e740a5521b8',
+          isDuplicate: false,
+          isBlurry: false,
+          isFavorite: true,
+          selected: false,
+          colors: ['#D9A05B', '#4D7C0F', '#FEF08A', '#84CC16'],
+          tags: ['dog', 'golden-retriever', 'puppy', 'meadow', 'action', 'pet'],
+          caption: 'High-speed shutter capture of a golden retriever puppy mid-stride across a spring meadow.'
+        },
+        {
+          id: 'ps-105',
+          filename: 'LOFT_3310_Marcus_Portrait.jpg',
+          title: 'Marcus in Daylight Industrial Loft',
+          src: 'assets/photos/portrait_marcus.jpg',
+          category: 'People & Portraits',
+          personId: 'person-marcus',
+          capturedAt: '2026-10-19 11:45',
+          location: 'San Francisco, CA',
+          coords: '37.7749° N, 122.4194° W',
+          camera: 'Fujifilm GFX 100 II',
+          lens: 'GF 55mmF1.7 R WR',
+          aperture: 'f/2.0',
+          shutter: '1/500s',
+          iso: 125,
+          sizeMb: 5.1,
+          confidence: 98.9,
+          aesthetic: 9.3,
+          sharpness: 95.8,
+          phash: 'e73019a5c48812d0',
+          isDuplicate: false,
+          isBlurry: false,
+          isFavorite: false,
+          selected: false,
+          colors: ['#60A5FA', '#E2E8F0', '#78350F', '#334155'],
+          tags: ['portrait', 'marcus', 'glasses', 'loft', 'editorial', 'indoor'],
+          caption: 'Editorial medium-format portrait of Marcus Vance in an airy brick-and-glass studio.'
+        },
+        {
+          id: 'ps-106',
+          filename: 'KYOTO_7712_Kiyomizu_Sakura.jpg',
+          title: 'Kyoto Wooden Pagoda Framed by Sakura',
+          src: 'assets/photos/kyoto_pagoda.jpg',
+          category: 'Travel & Architecture',
+          personId: null,
+          capturedAt: '2026-04-06 08:12',
+          location: 'Kyoto, Japan',
+          coords: '34.9949° N, 135.7850° E',
+          camera: 'Nikon Z8',
+          lens: 'NIKKOR Z 35mm f/1.8 S',
+          aperture: 'f/4.0',
+          shutter: '1/640s',
+          iso: 64,
+          sizeMb: 6.4,
+          confidence: 99.5,
+          aesthetic: 9.8,
+          sharpness: 97.6,
+          phash: 'a1409f82d36741e2',
+          isDuplicate: false,
+          isBlurry: false,
+          isFavorite: true,
+          selected: false,
+          colors: ['#FBCFE8', '#57534E', '#BAE6FD', '#4D7C0F'],
+          tags: ['kyoto', 'japan', 'pagoda', 'cherry-blossom', 'sakura', 'temple'],
+          caption: 'Historic three-tiered wooden pagoda in Kyoto surrounded by blooming pink cherry blossoms.'
+        },
+        {
+          id: 'ps-107',
+          filename: 'PARIS_1194_Marble_Brunch.jpg',
+          title: 'Artisanal Croissant & Latte Marble Table',
+          src: 'assets/photos/artisan_brunch.jpg',
+          category: 'Culinary',
+          personId: null,
+          capturedAt: '2026-10-09 09:30',
+          location: 'Paris, France',
+          coords: '48.8566° N, 2.3522° E',
+          camera: 'Sony A7 IV',
+          lens: 'FE 50mm F1.4 GM',
+          aperture: 'f/2.8',
+          shutter: '1/400s',
+          iso: 100,
+          sizeMb: 4.3,
+          confidence: 98.7,
+          aesthetic: 9.4,
+          sharpness: 96.0,
+          phash: '99c12084b73265a4',
+          isDuplicate: false,
+          isBlurry: false,
+          isFavorite: false,
+          selected: false,
+          colors: ['#F59E0B', '#B45309', '#DC2626', '#F1F5F9'],
+          tags: ['food', 'brunch', 'coffee', 'croissant', 'latte-art', 'paris'],
+          caption: 'Overhead flat-lay of flaky butter croissant, fresh berries, and rosetta latte art on Carrara marble.'
+        },
+        {
+          id: 'ps-108',
+          filename: 'ARCH_9021_Coastal_Pavilion.jpg',
+          title: 'Minimalist White Coastal Art Pavilion',
+          src: 'assets/photos/coastal_museum.jpg',
+          category: 'Travel & Architecture',
+          personId: null,
+          capturedAt: '2026-08-15 16:05',
+          location: 'Melbourne Coast, AU',
+          coords: '37.8136° S, 144.9631° E',
+          camera: 'Hasselblad X2D 100C',
+          lens: 'XCD 38V f/2.5',
+          aperture: 'f/8.0',
+          shutter: '1/500s',
+          iso: 64,
+          sizeMb: 5.9,
+          confidence: 99.0,
+          aesthetic: 9.5,
+          sharpness: 98.5,
+          phash: '77e23109c8a451f0',
+          isDuplicate: false,
+          isBlurry: false,
+          isFavorite: false,
+          selected: false,
+          colors: ['#0284C7', '#F8FAFC', '#94A3B8', '#0F172A'],
+          tags: ['architecture', 'minimalist', 'museum', 'modern', 'coastal', 'geometry'],
+          caption: 'Sculptural white concrete and cantilevered glass museum set against a cloudless azure ocean horizon.'
+        },
+        {
+          id: 'ps-109',
+          filename: 'KYOTO_7715_Sakura_Macro.jpg',
+          title: 'Sunlit Sakura Blossom Canopy Macro',
+          src: 'assets/photos/sakura_detail.jpg',
+          category: 'Travel & Architecture',
+          personId: null,
+          capturedAt: '2026-04-06 08:19',
+          location: 'Kyoto, Japan',
+          coords: '34.9951° N, 135.7852° E',
+          camera: 'Nikon Z8',
+          lens: 'NIKKOR Z 85mm f/1.8 S',
+          aperture: 'f/2.8',
+          shutter: '1/1250s',
+          iso: 64,
+          sizeMb: 4.6,
+          confidence: 98.2,
+          aesthetic: 9.2,
+          sharpness: 95.1,
+          phash: 'a1409f82d39910b7',
+          isDuplicate: false,
+          isBlurry: false,
+          isFavorite: false,
+          selected: false,
+          colors: ['#FCE7F3', '#F472B6', '#38BDF8', '#78716C'],
+          tags: ['sakura', 'blossoms', 'spring', 'kyoto', 'petals', 'botanical'],
+          caption: 'Delicate pink cherry blossom branches illuminated by crisp morning light in Higashiyama.'
+        },
+        {
+          id: 'ps-110',
+          filename: 'IMG_8845_Alps_Emerald_Tarn.jpg',
+          title: 'Emerald Glacier Reflection Panorama',
+          src: 'assets/photos/alpine_reflection.jpg',
+          category: 'Nature & Alps',
+          personId: null,
+          capturedAt: '2026-10-14 17:49',
+          location: 'Zermatt, Swiss Alps',
+          coords: '45.9768° N, 7.6590° E',
+          camera: 'Sony A7R V',
+          lens: 'FE 35mm F1.4 GM',
+          aperture: 'f/4.0',
+          shutter: '1/250s',
+          iso: 100,
+          sizeMb: 5.5,
+          confidence: 98.8,
+          aesthetic: 9.4,
+          sharpness: 96.7,
+          phash: 'f8c492e1a4c91204',
+          isDuplicate: false,
+          isBlurry: false,
+          isFavorite: false,
+          selected: false,
+          colors: ['#0369A1', '#F59E0B', '#1E3A8A', '#15803D'],
+          tags: ['alps', 'reflection', 'glacier', 'turquoise', 'panorama', 'swiss'],
+          caption: 'Mirror-still alpine waters capturing vibrant golden-hour ridges in the Pennine Alps.'
+        },
+        {
+          id: 'ps-111',
+          filename: 'AMALFI_2210_Positano_Burst2.jpg',
+          title: 'Positano Cliffside Villas (Burst Duplicate #2)',
+          src: 'assets/photos/amalfi_coast_burst2.jpg',
+          category: 'Travel & Architecture',
+          personId: null,
+          capturedAt: '2026-09-28 13:20',
+          location: 'Amalfi Coast, Italy',
+          coords: '40.6281° N, 14.4850° E',
+          camera: 'Leica Q3',
+          lens: 'Summilux 28mm f/1.7 ASPH',
+          aperture: 'f/5.6',
+          shutter: '1/1000s',
+          iso: 100,
+          sizeMb: 4.8,
+          confidence: 96.8,
+          aesthetic: 8.6,
+          sharpness: 89.4,
+          phash: 'd471a8329c1104ee',
+          duplicateOf: 'ps-103',
+          isDuplicate: true,
+          isBlurry: false,
+          isFavorite: false,
+          selected: false,
+          colors: ['#0284C7', '#EAB308', '#15803D', '#F8FAFC'],
+          tags: ['burst-duplicate', 'amalfi', 'italy', 'redundant-shot'],
+          caption: 'Flagged by pHash deduplicator: 96.8% perceptual hash match with master frame AMALFI_2209.'
+        },
+        {
+          id: 'ps-112',
+          filename: 'IMG_5103_Barnaby_MotionBlur.jpg',
+          title: 'Barnaby Meadow Sprint (Out-of-Focus Burst)',
+          src: 'assets/photos/golden_puppy_blur.jpg',
+          category: 'Pets & Wildlife',
+          personId: 'person-barnaby',
+          capturedAt: '2026-10-21 15:08',
+          location: 'San Francisco, CA',
+          coords: '37.7989° N, 122.4662° W',
+          camera: 'Sony A9 III',
+          lens: 'FE 70-200mm F2.8 GM OSS II',
+          aperture: 'f/2.8',
+          shutter: '1/60s',
+          iso: 250,
+          sizeMb: 3.9,
+          confidence: 94.2,
+          aesthetic: 5.4,
+          sharpness: 31.2,
+          phash: 'c9183e740a5521b9',
+          duplicateOf: 'ps-104',
+          isDuplicate: false,
+          isBlurry: true,
+          isFavorite: false,
+          selected: false,
+          colors: ['#D9A05B', '#4D7C0F', '#FEF08A'],
+          tags: ['motion-blur', 'low-sharpness', 'dog', 'cleanup-candidate'],
+          caption: 'Flagged by Laplacian variance analyzer (Sharpness 31.2 < 45.0 cutoff) due to camera shake.'
+        }
+      ];
+
+      const INITIAL_PEOPLE = [
+        {
+          id: 'person-elena',
+          name: 'Elena Rostova',
+          role: 'Family & Travel Companion',
+          avatar: 'assets/photos/avatar_elena.jpg',
+          confidence: 99.6
+        },
+        {
+          id: 'person-marcus',
+          name: 'Marcus Vance',
+          role: 'Creative Director & Studio',
+          avatar: 'assets/photos/avatar_marcus.jpg',
+          confidence: 98.9
+        },
+        {
+          id: 'person-barnaby',
+          name: 'Barnaby (Golden Retriever)',
+          role: 'Pet Biometric Cluster',
+          avatar: 'assets/photos/golden_puppy.jpg',
+          confidence: 99.3
+        }
+      ];
+
+      const INITIAL_RULES = [
+        {
+          id: 'rule-1',
+          name: 'Alpine & Landscape Masterpieces',
+          condition: "ai_tags && ARRAY['alps','mountain','lake'] AND sharpness_score >= 90",
+          targetAlbum: 'Nature & Alps',
+          active: true,
+          matches: 2
+        },
+        {
+          id: 'rule-2',
+          name: 'Prime Lens Portrait Cluster',
+          condition: "focal_length IN ('50mm','55mm','85mm') AND person_id IS NOT NULL",
+          targetAlbum: 'People & Portraits',
+          active: true,
+          matches: 2
+        },
+        {
+          id: 'rule-3',
+          name: 'Global Heritage & Architecture',
+          condition: "ai_tags && ARRAY['kyoto','amalfi','architecture','museum']",
+          targetAlbum: 'Travel & Architecture',
+          active: true,
+          matches: 5
+        },
+        {
+          id: 'rule-4',
+          name: 'Quarantine Low-Sharpness & pHash Duplicates',
+          condition: "sharpness_score < 45.0 OR is_duplicate = TRUE",
+          targetAlbum: 'Cleaner Quarantine',
+          active: true,
+          matches: 2
+        }
+      ];
+
+      // Application Reactive State
+      let state = {
+        photos: INITIAL_PHOTOS.map(p => ({ ...p, tags: [...p.tags], colors: [...p.colors] })),
+        people: INITIAL_PEOPLE.map(p => ({ ...p })),
+        rules: INITIAL_RULES.map(r => ({ ...r })),
+        activeView: 'all',
+        selectedCategory: 'all',
+        selectedPersonId: null,
+        selectedMapLocation: null,
+        searchQuery: '',
+        sortBy: 'aesthetic',
+        gridDensity: 'comfortable', // 'comfortable' | 'compact' | 'list'
+        inspectorPhotoId: null,
+        reclaimedMb: 14.2,
+        neonLatencyMs: 14,
+        chunkCounter: 1
+      };
+
+      // Try restoring saved state from localStorage safely
+      try {
+        const saved = localStorage.getItem('photosorter_neondb_state_v2');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed.photos) && parsed.photos.length > 0) {
+            state.photos = parsed.photos;
+          }
+          if (typeof parsed.reclaimedMb === 'number') {
+            state.reclaimedMb = parsed.reclaimedMb;
+          }
+        }
+      } catch (e) {
+        // Ignore sandbox storage errors
+      }
+
+      function persistState() {
+        try {
+          localStorage.setItem('photosorter_neondb_state_v2', JSON.stringify({
+            photos: state.photos,
+            reclaimedMb: state.reclaimedMb
+          }));
+        } catch (e) {
+          // Ignore sandbox storage errors
+        }
+      }
+
+      // Toast helper (replaces blocked alert/confirm)
+      function showToast(title, subtitle, tone) {
+        const container = document.getElementById('toastContainer');
+        if (!container) return;
+        const colors = {
+          success: 'border-emerald-200 bg-white text-slate-900',
+          info: 'border-blue-200 bg-white text-slate-900',
+          warn: 'border-amber-200 bg-white text-slate-900'
+        };
+        const badgeColors = {
+          success: 'bg-emerald-100 text-emerald-800',
+          info: 'bg-blue-100 text-blue-800',
+          warn: 'bg-amber-100 text-amber-800'
+        };
+        const toast = document.createElement('div');
+        toast.className = `pointer-events-auto p-3.5 rounded-2xl border shadow-lg transition-all duration-200 flex items-start gap-3 ${colors[tone || 'info']}`;
+        toast.innerHTML = `
+          <span class="px-2 py-0.5 rounded-md text-[11px] font-bold uppercase ${badgeColors[tone || 'info']}">${tone === 'warn' ? 'Cleaner' : tone === 'success' ? 'NeonDB' : 'AI Studio'}</span>
+          <div class="min-w-0 flex-1">
+            <p class="text-xs font-bold text-slate-900">${title}</p>
+            <p class="text-[11px] text-slate-600 mt-0.5">${subtitle || ''}</p>
+          </div>
+        `;
+        container.appendChild(toast);
+        setTimeout(() => {
+          toast.style.opacity = '0';
+          toast.style.transform = 'translateY(6px)';
+          setTimeout(() => toast.remove(), 220);
+        }, 3400);
+      }
+
+      // Copy text helper with fallback
+      function copyTextToClipboard(text, label) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(() => {
+            showToast(`Copied ${label}`, 'Ready to paste into your Netlify or NeonDB workflow.', 'success');
+          }).catch(() => fallbackCopy(text, label));
+        } else {
+          fallbackCopy(text, label);
+        }
+      }
+
+      function fallbackCopy(text, label) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand('copy');
+          showToast(`Copied ${label}`, 'Copied to clipboard.', 'success');
+        } catch (err) {
+          showToast('Copy Ready', 'Select the text directly to copy.', 'info');
+        }
+        ta.remove();
+      }
+
+      // Compute filtered & sorted photos
+      function getFilteredPhotos() {
+        const q = state.searchQuery.trim().toLowerCase();
+        return state.photos
+          .filter(p => {
+            if (state.selectedCategory === 'Favorites') {
+              if (!p.isFavorite) return false;
+            } else if (state.selectedCategory !== 'all') {
+              if (p.category !== state.selectedCategory) return false;
+            }
+            if (state.selectedPersonId && p.personId !== state.selectedPersonId) {
+              return false;
+            }
+            if (q) {
+              const hay = [
+                p.title,
+                p.filename,
+                p.category,
+                p.location,
+                p.camera,
+                p.caption,
+                ...(p.tags || [])
+              ].join(' ').toLowerCase();
+              if (!hay.includes(q)) return false;
+            }
+            return true;
+          })
+          .sort((a, b) => {
+            if (state.sortBy === 'aesthetic') return b.aesthetic - a.aesthetic;
+            if (state.sortBy === 'sharpness') return b.sharpness - a.sharpness;
+            if (state.sortBy === 'confidence') return b.confidence - a.confidence;
+            if (state.sortBy === 'size') return b.sizeMb - a.sizeMb;
+            return b.capturedAt.localeCompare(a.capturedAt);
+          });
+      }
+
+      // Update Top KPIs, Sidebar Counts, and Storage Meter
+      function renderKpisAndCounts() {
+        const total = state.photos.length;
+        const avgConf = total
+          ? (state.photos.reduce((acc, p) => acc + p.confidence, 0) / total).toFixed(1)
+          : '98.4';
+        const flagged = state.photos.filter(p => p.isDuplicate || p.isBlurry);
+        const flaggedMb = flagged.reduce((acc, p) => acc + p.sizeMb, 0).toFixed(1);
+        const totalMb = state.photos.reduce((acc, p) => acc + p.sizeMb, 0).toFixed(1);
+
+        document.getElementById('kpiTotalPhotos').textContent = String(total);
+        document.getElementById('badgeCountAll').textContent = String(total);
+        document.getElementById('kpiAvgConfidence').textContent = `${avgConf}%`;
+        document.getElementById('kpiCleanerFlags').textContent = String(flagged.length);
+        document.getElementById('badgeCountCleaner').textContent = `${flagged.length} Flag${flagged.length === 1 ? '' : 's'}`;
+        document.getElementById('kpiCleanerSubtext').textContent =
+          flagged.length > 0 ? `${flaggedMb} MB Ready to Reclaim` : `All clean! ${state.reclaimedMb.toFixed(1)} MB Reclaimed`;
+
+        document.getElementById('storagePercentBadge').textContent = `${totalMb} MB`;
+        document.getElementById('storageReclaimedText').textContent = `Reclaimed: ${state.reclaimedMb.toFixed(1)} MB`;
+        document.getElementById('neonRowCountValue').textContent = `${total} photos`;
+
+        // Update category counts in sidebar
+        const cats = ['Nature & Alps', 'People & Portraits', 'Travel & Architecture', 'Pets & Wildlife', 'Culinary'];
+        cats.forEach(c => {
+          const el = document.querySelector(`[data-cat-count="${c}"]`);
+          if (el) {
+            el.textContent = String(state.photos.filter(p => p.category === c).length);
+          }
+        });
+        const favCount = state.photos.filter(p => p.isFavorite).length;
+        const favEl = document.getElementById('sidebarFavCount');
+        if (favEl) favEl.textContent = String(favCount);
+      }
+
+      // Render Photo Gallery Grid (View 1)
+      function renderGallery() {
+        const container = document.getElementById('photoGalleryContainer');
+        if (!container) return;
+        const filtered = getFilteredPhotos();
+
+        // Update status count & active filter pill
+        const countEl = document.getElementById('galleryStatusCount');
+        countEl.textContent = `Showing ${filtered.length} of ${state.photos.length} HD photos`;
+
+        const chip = document.getElementById('activeFilterChip');
+        const chipText = document.getElementById('activeFilterText');
+        if (state.selectedPersonId || state.searchQuery || state.selectedCategory !== 'all') {
+          chip.classList.remove('hidden');
+          chip.classList.add('inline-flex');
+          const parts = [];
+          if (state.selectedCategory !== 'all') parts.push(`Album: ${state.selectedCategory}`);
+          if (state.selectedPersonId) {
+            const person = state.people.find(x => x.id === state.selectedPersonId);
+            if (person) parts.push(`Person: ${person.name}`);
+          }
+          if (state.searchQuery) parts.push(`Search: "${state.searchQuery}"`);
+          chipText.textContent = parts.join(' • ');
+        } else {
+          chip.classList.add('hidden');
+          chip.classList.remove('inline-flex');
+        }
+
+        // Update Category Pill Active States
+        document.querySelectorAll('.cat-pill').forEach(btn => {
+          const isMatch = btn.getAttribute('data-cat') === state.selectedCategory;
+          btn.className = isMatch
+            ? 'cat-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-600 text-white shadow-2xs transition'
+            : 'cat-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition';
+        });
+
+        if (filtered.length === 0) {
+          container.className = 'bg-white rounded-2xl p-10 text-center border border-slate-200';
+          container.innerHTML = `
+            <p class="text-base font-bold text-slate-800">No photographs match your current filter</p>
+            <p class="text-xs text-slate-500 mt-1">Try clearing the search query or switching to All Photos.</p>
+            <button type="button" data-action="reset-filters" class="mt-4 px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700">
+              Reset Filters
+            </button>
+          `;
+          return;
+        }
+
+        // Table / List mode vs Grid modes
+        if (state.gridDensity === 'list') {
+          container.className = 'bg-white rounded-2xl border border-slate-200 overflow-x-auto shadow-xs';
+          container.innerHTML = `
+            <table class="w-full text-left border-collapse text-xs">
+              <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[11px]">
+                <tr>
+                  <th class="py-3 px-4">Photo</th>
+                  <th class="py-3 px-3">Category</th>
+                  <th class="py-3 px-3">Location &amp; Camera</th>
+                  <th class="py-3 px-3">Aesthetic</th>
+                  <th class="py-3 px-3">Sharpness</th>
+                  <th class="py-3 px-3">Size</th>
+                  <th class="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                ${filtered.map(p => `
+                  <tr class="hover:bg-blue-50/40 transition">
+                    <td class="py-2.5 px-4 flex items-center gap-3">
+                      <img src="${p.src}" alt="${p.title}" class="w-14 h-10 rounded-lg object-cover border border-slate-200 shrink-0 cursor-pointer" data-open-inspector="${p.id}" />
+                      <div class="min-w-0">
+                        <button type="button" data-open-inspector="${p.id}" class="font-bold text-slate-900 hover:text-blue-600 truncate block text-left">${p.title}</button>
+                        <span class="text-[11px] font-mono-code text-slate-400">${p.filename}</span>
+                      </div>
+                    </td>
+                    <td class="py-2.5 px-3">
+                      <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">${p.category}</span>
+                    </td>
+                    <td class="py-2.5 px-3 text-slate-600">
+                      <div class="font-medium text-slate-800">${p.location}</div>
+                      <div class="text-[11px] text-slate-400">${p.camera} • ${p.aperture}</div>
+                    </td>
+                    <td class="py-2.5 px-3 font-mono-code font-bold text-emerald-700">${p.aesthetic}/10</td>
+                    <td class="py-2.5 px-3 font-mono-code ${p.isBlurry ? 'text-amber-600 font-bold' : 'text-slate-700'}">${p.sharpness}</td>
+                    <td class="py-2.5 px-3 font-mono-code text-slate-600">${p.sizeMb} MB</td>
+                    <td class="py-2.5 px-4 text-right space-x-1">
+                      <button type="button" data-toggle-fav="${p.id}" class="px-2 py-1 rounded-lg border border-slate-200 ${p.isFavorite ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-white text-slate-500'}">★</button>
+                      <button type="button" data-open-inspector="${p.id}" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 font-semibold transition">Inspect</button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+          return;
+        }
+
+        // Standard or Compact Responsive Card Grid
+        container.className = state.gridDensity === 'compact'
+          ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3'
+          : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5';
+
+        container.innerHTML = filtered.map(p => {
+          const statusBadges = [];
+          if (p.isDuplicate) {
+            statusBadges.push(`<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100/95 text-amber-900 border border-amber-300">pHash Duplicate</span>`);
+          }
+          if (p.isBlurry) {
+            statusBadges.push(`<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-100/95 text-rose-900 border border-rose-300">Blur Flag (${p.sharpness})</span>`);
+          }
+
+          return `
+            <article class="photo-card group bg-white rounded-2xl border ${p.selected ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-200/90'} overflow-hidden shadow-xs flex flex-col justify-between">
+              <div>
+                <!-- Image Header -->
+                <div class="relative aspect-4/3 bg-slate-100 overflow-hidden">
+                  <img
+                    src="${p.src}"
+                    alt="${p.title}"
+                    loading="lazy"
+                    data-open-inspector="${p.id}"
+                    class="w-full h-full object-cover cursor-pointer group-hover:scale-105 transition duration-300"
+                  />
+                  <!-- Top Left: Checkbox + Category Badge -->
+                  <div class="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      data-toggle-select="${p.id}"
+                      aria-label="Select ${p.title}"
+                      class="w-6 h-6 rounded-lg ${p.selected ? 'bg-blue-600 text-white border-blue-600' : 'bg-white/90 text-slate-600 border-slate-300'} border flex items-center justify-center text-xs font-bold shadow-xs"
+                    >
+                      ${p.selected ? '✓' : ''}
+                    </button>
+                    <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/90 text-slate-800 backdrop-blur-xs border border-slate-200/80 shadow-2xs">
+                      ${p.category}
+                    </span>
+                  </div>
+
+                  <!-- Top Right: Favorite Star -->
+                  <button
+                    type="button"
+                    data-toggle-fav="${p.id}"
+                    aria-label="Favorite ${p.title}"
+                    class="absolute top-2.5 right-2.5 w-7 h-7 rounded-full ${p.isFavorite ? 'bg-rose-500 text-white' : 'bg-white/90 text-slate-500 hover:text-rose-500'} flex items-center justify-center shadow-xs transition"
+                  >
+                    ★
+                  </button>
+
+                  <!-- Bottom Overlay Badges -->
+                  <div class="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between gap-1 pointer-events-none">
+                    <div class="flex items-center gap-1 flex-wrap">
+                      ${statusBadges.join('')}
+                    </div>
+                    <span class="px-2 py-0.5 rounded-md text-[10px] font-mono-code font-bold bg-white/95 text-emerald-800 border border-emerald-200 shadow-2xs">
+                      AI ${p.confidence}% • ★ ${p.aesthetic}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Card Body -->
+                <div class="p-3.5 space-y-2">
+                  <div class="flex items-start justify-between gap-2">
+                    <button type="button" data-open-inspector="${p.id}" class="text-sm font-bold text-slate-900 hover:text-blue-600 text-left line-clamp-1">
+                      ${p.title}
+                    </button>
+                  </div>
+
+                  <div class="flex items-center justify-between text-[11px] text-slate-500">
+                    <span class="truncate">📍 ${p.location}</span>
+                    <span class="font-mono-code shrink-0">${p.camera}</span>
+                  </div>
+
+                  <!-- AI Semantic Tag Pills -->
+                  <div class="flex flex-wrap gap-1 pt-0.5">
+                    ${(p.tags || []).slice(0, 4).map(t => `
+                      <button type="button" data-tag-filter="${t}" class="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-600 transition">
+                        #${t}
+                      </button>
+                    `).join('')}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card Footer -->
+              <div class="px-3.5 py-2.5 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                <div class="flex items-center gap-1">
+                  ${(p.colors || []).map(c => `<span class="w-3 h-3 rounded-full border border-white shadow-2xs" style="background:${c}"></span>`).join('')}
+                  <span class="text-slate-400 font-mono-code ml-1">${p.sizeMb} MB</span>
+                </div>
+                <button type="button" data-open-inspector="${p.id}" class="font-semibold text-blue-600 hover:text-blue-800">
+                  EXIF &amp; AI →
+                </button>
+              </div>
+            </article>
+          `;
+        }).join('');
+      }
+
+      // Render Smart Rules in View 2
+      function renderSmartRules() {
+        const container = document.getElementById('smartRulesList');
+        if (!container) return;
+        container.innerHTML = state.rules.map(r => `
+          <div class="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 flex items-start justify-between gap-3">
+            <div class="space-y-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full ${r.active ? 'bg-emerald-500' : 'bg-slate-300'}"></span>
+                <h4 class="text-xs sm:text-sm font-bold text-slate-900 truncate">${r.name}</h4>
+              </div>
+              <p class="text-[11px] font-mono-code text-slate-600 bg-white px-2.5 py-1 rounded-lg border border-slate-200 truncate">${r.condition}</p>
+              <p class="text-[11px] text-slate-500">Routes to Album: <strong class="text-blue-700">${r.targetAlbum}</strong> • Matched ${r.matches} photos</p>
+            </div>
+            <button
+              type="button"
+              data-toggle-rule="${r.id}"
+              class="px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition ${r.active ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-white text-slate-500 border-slate-200'}"
+            >
+              ${r.active ? 'Active' : 'Paused'}
+            </button>
+          </div>
+        `).join('');
+      }
+
+      // Render People & Face Clusters in View 3
+      function renderPeopleClusters() {
+        const container = document.getElementById('peopleClustersGrid');
+        if (!container) return;
+        container.innerHTML = state.people.map(person => {
+          const matches = state.photos.filter(p => p.personId === person.id);
+          return `
+            <div class="p-5 rounded-2xl bg-slate-50/70 border border-slate-200 flex flex-col justify-between gap-4">
+              <div class="flex items-center gap-3.5">
+                <img src="${person.avatar}" alt="${person.name}" class="w-16 h-16 rounded-2xl object-cover border-2 border-white shadow-sm shrink-0" />
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-1.5">
+                    <h3 class="text-base font-extrabold text-slate-900 truncate">${person.name}</h3>
+                  </div>
+                  <p class="text-xs text-slate-500">${person.role}</p>
+                  <span class="inline-block mt-1 px-2 py-0.5 rounded-md text-[11px] font-mono-code bg-pink-50 text-pink-700 border border-pink-200">
+                    Match Confidence: ${person.confidence}%
+                  </span>
+                </div>
+              </div>
+
+              <!-- Mini Thumbnails -->
+              <div class="grid grid-cols-3 gap-2">
+                ${matches.slice(0, 3).map(m => `
+                  <img src="${m.src}" alt="${m.title}" data-open-inspector="${m.id}" class="w-full h-16 object-cover rounded-xl border border-slate-200 cursor-pointer hover:opacity-90" />
+                `).join('')}
+              </div>
+
+              <div class="flex items-center justify-between pt-2 border-t border-slate-200/80">
+                <span class="text-xs font-semibold text-slate-600">${matches.length} Indexed Photo${matches.length === 1 ? '' : 's'}</span>
+                <button type="button" data-filter-person="${person.id}" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition">
+                  View Cluster in Gallery →
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // Render Duplicate & Blur Cleaner in View 4
+      function renderCleanerView() {
+        const container = document.getElementById('cleanerPairsContainer');
+        if (!container) return;
+        const flagged = state.photos.filter(p => p.isDuplicate || p.isBlurry);
+
+        if (flagged.length === 0) {
+          container.innerHTML = `
+            <div class="p-10 rounded-2xl bg-emerald-50/60 border border-emerald-200 text-center space-y-2">
+              <p class="text-base font-extrabold text-emerald-950">🎉 Zero Duplicates or Blurry Shots Remaining!</p>
+              <p class="text-xs text-emerald-800">Your photo library is 100% deduplicated and synced with NeonDB Serverless Postgres.</p>
+            </div>
+          `;
+          return;
+        }
+
+        container.innerHTML = flagged.map(bad => {
+          const master = state.photos.find(p => p.id === bad.duplicateOf) || state.photos[0];
+          const reasonBadge = bad.isBlurry
+            ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">Laplacian Motion Blur Detected (Sharpness ${bad.sharpness} vs ${master.sharpness})</span>`
+            : `<span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-200">pHash Near-Duplicate Burst (96.8% Perceptual Match)</span>`;
+
+          return `
+            <div class="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                ${reasonBadge}
+                <span class="text-xs font-mono-code text-slate-500">Reclaimable Space: <strong class="text-slate-800">${bad.sizeMb} MB</strong></span>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Master Recommended Shot -->
+                <div class="p-3.5 rounded-2xl bg-white border-2 border-emerald-400 shadow-xs space-y-2">
+                  <div class="flex items-center justify-between">
+                    <span class="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-100 text-emerald-800">✓ AI Recommended Master</span>
+                    <span class="text-xs font-mono-code font-bold text-emerald-700">Sharpness: ${master.sharpness} • ★ ${master.aesthetic}</span>
+                  </div>
+                  <img src="${master.src}" alt="${master.title}" class="w-full h-44 object-cover rounded-xl border border-slate-200" />
+                  <p class="text-xs font-bold text-slate-900">${master.title} <span class="font-mono-code text-slate-400">(${master.filename})</span></p>
+                </div>
+
+                <!-- Redundant / Blurry Flagged Shot -->
+                <div class="p-3.5 rounded-2xl bg-white border-2 border-amber-300 shadow-xs space-y-2">
+                  <div class="flex items-center justify-between">
+                    <span class="px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-100 text-amber-900">⚠️ Flagged Candidate</span>
+                    <span class="text-xs font-mono-code font-bold text-amber-700">Sharpness: ${bad.sharpness} • ★ ${bad.aesthetic}</span>
+                  </div>
+                  <img src="${bad.src}" alt="${bad.title}" class="w-full h-44 object-cover rounded-xl border border-slate-200" />
+                  <div class="flex items-center justify-between gap-2 pt-1">
+                    <p class="text-xs font-bold text-slate-900 truncate">${bad.title}</p>
+                    <button
+                      type="button"
+                      data-clean-photo="${bad.id}"
+                      class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white shrink-0 transition"
+                    >
+                      Clean &amp; Reclaim ${bad.sizeMb} MB
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // Render Geo-Location Map Photos in View 5
+      function renderMapView() {
+        const grid = document.getElementById('mapPhotosGrid');
+        const title = document.getElementById('mapSelectedLocationTitle');
+        if (!grid || !title) return;
+
+        const list = state.selectedMapLocation
+          ? state.photos.filter(p => p.location === state.selectedMapLocation)
+          : state.photos;
+
+        title.textContent = state.selectedMapLocation
+          ? `GPS Location Cluster: ${state.selectedMapLocation} (${list.length} HD Photos)`
+          : `All Geo-Tagged Photographs (${list.length} HD Photos)`;
+
+        grid.innerHTML = list.map(p => `
+          <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-2">
+            <img src="${p.src}" alt="${p.title}" data-open-inspector="${p.id}" class="w-full h-36 object-cover rounded-xl border border-slate-200 cursor-pointer" />
+            <div>
+              <p class="text-xs font-bold text-slate-900 truncate">${p.title}</p>
+              <p class="text-[11px] text-blue-700 font-medium">📍 ${p.location}</p>
+              <p class="text-[10px] font-mono-code text-slate-400">${p.coords}</p>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      // Execute Live Simulated SQL Query in View 6 (NeonDB Studio)
+      function runLiveSqlQuery(presetKey) {
+        const textarea = document.getElementById('sqlQueryTextarea');
+        const thead = document.getElementById('sqlResultThead');
+        const tbody = document.getElementById('sqlResultTbody');
+        const meta = document.getElementById('sqlResultMeta');
+        if (!textarea || !thead || !tbody || !meta) return;
+
+        if (presetKey === 'top_aesthetic') {
+          textarea.value = "SELECT id, filename, category, aesthetic_score, sharpness_score, ai_confidence FROM photos WHERE is_archived = FALSE ORDER BY aesthetic_score DESC LIMIT 8;";
+        } else if (presetKey === 'group_category') {
+          textarea.value = "SELECT category, COUNT(*) AS total_photos, ROUND(AVG(aesthetic_score), 2) AS avg_aesthetic, ROUND(SUM(file_size_mb), 1) AS total_mb FROM photos GROUP BY category ORDER BY total_photos DESC;";
+        } else if (presetKey === 'flagged_cleanup') {
+          textarea.value = "SELECT id, filename, category, sharpness_score, phash, is_blurry, is_duplicate FROM photos WHERE is_blurry = TRUE OR is_duplicate = TRUE;";
+        } else if (presetKey === 'vector_similarity') {
+          textarea.value = "SELECT id, title, location_name, ROUND(1 - (clip_embedding <=> '[0.041, -0.088, ...]'::vector), 4) AS cosine_similarity FROM photos ORDER BY cosine_similarity DESC LIMIT 5;";
+        }
+
+        const q = textarea.value.toLowerCase();
+        const latency = Math.floor(11 + Math.random() * 8);
+        state.neonLatencyMs = latency;
+        document.getElementById('kpiNeonLatency').textContent = `${latency} ms`;
+        document.getElementById('neonPingValue').textContent = `${latency} ms`;
+
+        if (q.includes('group by category')) {
+          const groups = {};
+          state.photos.forEach(p => {
+            if (!groups[p.category]) groups[p.category] = { count: 0, aestheticSum: 0, mbSum: 0 };
+            groups[p.category].count += 1;
+            groups[p.category].aestheticSum += p.aesthetic;
+            groups[p.category].mbSum += p.sizeMb;
+          });
+          const rows = Object.entries(groups).map(([cat, g]) => ({
+            category: cat,
+            total_photos: g.count,
+            avg_aesthetic: (g.aestheticSum / g.count).toFixed(2),
+            total_mb: g.mbSum.toFixed(1) + ' MB'
+          }));
+          renderSqlTable(['category', 'total_photos', 'avg_aesthetic', 'total_mb'], rows, latency);
+        } else if (q.includes('is_blurry') || q.includes('is_duplicate')) {
+          const rows = state.photos.filter(p => p.isBlurry || p.isDuplicate).map(p => ({
+            id: p.id,
+            filename: p.filename,
+            category: p.category,
+            sharpness_score: p.sharpness,
+            phash: p.phash,
+            status: p.isBlurry ? 'BLURRY' : 'DUPLICATE'
+          }));
+          renderSqlTable(['id', 'filename', 'category', 'sharpness_score', 'phash', 'status'], rows, latency);
+        } else if (q.includes('cosine_similarity') || q.includes('clip_embedding')) {
+          const rows = state.photos.slice(0, 5).map((p, idx) => ({
+            id: p.id,
+            title: p.title,
+            location_name: p.location,
+            cosine_similarity: (0.984 - idx * 0.027).toFixed(4)
+          }));
+          renderSqlTable(['id', 'title', 'location_name', 'cosine_similarity'], rows, latency);
+        } else {
+          const rows = [...state.photos]
+            .sort((a, b) => b.aesthetic - a.aesthetic)
+            .slice(0, 8)
+            .map(p => ({
+              id: p.id,
+              filename: p.filename,
+              category: p.category,
+              aesthetic_score: p.aesthetic,
+              sharpness_score: p.sharpness,
+              ai_confidence: p.confidence + '%'
+            }));
+          renderSqlTable(['id', 'filename', 'category', 'aesthetic_score', 'sharpness_score', 'ai_confidence'], rows, latency);
+        }
+      }
+
+      function renderSqlTable(columns, rows, latency) {
+        const thead = document.getElementById('sqlResultThead');
+        const tbody = document.getElementById('sqlResultTbody');
+        const meta = document.getElementById('sqlResultMeta');
+        meta.textContent = `Query Results (${rows.length} rows • ${latency} ms via Neon Serverless HTTP)`;
+        thead.innerHTML = `<tr>${columns.map(c => `<th class="py-2 px-3">${c}</th>`).join('')}</tr>`;
+        if (rows.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="${columns.length}" class="py-4 px-3 text-center text-slate-400">0 rows returned</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = rows.map(r => `
+          <tr class="hover:bg-blue-50/40">
+            ${columns.map(c => `<td class="py-2 px-3 whitespace-nowrap">${r[c] !== undefined ? r[c] : ''}</td>`).join('')}
+          </tr>
+        `).join('');
+      }
+
+      // Charts in View 2
+      let categoryChart = null;
+      let qualityChart = null;
+
+      function updateCharts() {
+        if (typeof Chart === 'undefined') return;
+        const catCanvas = document.getElementById('chartCategories');
+        const qualCanvas = document.getElementById('chartQuality');
+        if (!catCanvas || !qualCanvas) return;
+
+        const categories = ['Nature & Alps', 'People & Portraits', 'Travel & Architecture', 'Pets & Wildlife', 'Culinary'];
+        const counts = categories.map(c => state.photos.filter(p => p.category === c).length);
+
+        if (categoryChart) categoryChart.destroy();
+        categoryChart = new Chart(catCanvas, {
+          type: 'doughnut',
+          data: {
+            labels: categories,
+            datasets: [{
+              data: counts,
+              backgroundColor: ['#10B981', '#EC4899', '#3B82F6', '#F59E0B', '#F97316'],
+              borderWidth: 2,
+              borderColor: '#FFFFFF'
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } }
+            }
+          }
+        });
+
+        if (qualityChart) qualityChart.destroy();
+        qualityChart = new Chart(qualCanvas, {
+          type: 'bar',
+          data: {
+            labels: state.photos.slice(0, 8).map(p => p.title.slice(0, 14) + '…'),
+            datasets: [
+              {
+                label: 'Sharpness Score',
+                data: state.photos.slice(0, 8).map(p => p.sharpness),
+                backgroundColor: '#3B82F6',
+                borderRadius: 6
+              },
+              {
+                label: 'AI Confidence %',
+                data: state.photos.slice(0, 8).map(p => p.confidence),
+                backgroundColor: '#10B981',
+                borderRadius: 6
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: { beginAtZero: true, max: 100 }
+            },
+            plugins: {
+              legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } }
+            }
+          }
+        });
+      }
+
+      // Open Photo Lightbox & EXIF Inspector Modal
+      function openInspectorModal(photoId) {
+        const photo = state.photos.find(p => p.id === photoId);
+        if (!photo) return;
+        state.inspectorPhotoId = photo.id;
+
+        document.getElementById('inspectorCategoryBadge').textContent = photo.category;
+        document.getElementById('inspectorPhotoTitle').textContent = photo.title;
+        const imgEl = document.getElementById('inspectorImageEl');
+        imgEl.src = photo.src;
+        imgEl.alt = photo.title;
+
+        document.getElementById('inspectorEditCategory').value = photo.category;
+        document.getElementById('inspectorConfidenceVal').textContent = `${photo.confidence}%`;
+        document.getElementById('inspectorAestheticVal').textContent = `${photo.aesthetic} / 10`;
+        document.getElementById('inspectorSharpnessVal').textContent = String(photo.sharpness);
+        document.getElementById('inspectorAiCaption').textContent = photo.caption;
+
+        const favBtn = document.getElementById('btnInspectorToggleFav');
+        favBtn.textContent = photo.isFavorite ? '★ Starred in Favorites' : '☆ Add to Favorites';
+        favBtn.className = photo.isFavorite
+          ? 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500 text-white border border-rose-500 transition'
+          : 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-rose-50 text-slate-700 border border-slate-200 transition';
+
+        // Color swatches
+        document.getElementById('inspectorColorSwatches').innerHTML = (photo.colors || []).map(c => `
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono-code bg-slate-100 border border-slate-200">
+            <span class="w-3 h-3 rounded-full" style="background:${c}"></span>
+            ${c}
+          </span>
+        `).join('');
+
+        // Tags list
+        renderInspectorTags(photo);
+
+        // EXIF Metadata
+        document.getElementById('inspectorExifGrid').innerHTML = `
+          <div><span class="text-slate-400 block text-[10px]">FILENAME</span><strong class="text-slate-800 truncate block">${photo.filename}</strong></div>
+          <div><span class="text-slate-400 block text-[10px]">CAMERA</span><strong class="text-slate-800">${photo.camera}</strong></div>
+          <div><span class="text-slate-400 block text-[10px]">LENS</span><strong class="text-slate-800 truncate block">${photo.lens}</strong></div>
+          <div><span class="text-slate-400 block text-[10px]">EXPOSURE</span><strong class="text-slate-800">${photo.aperture} • ${photo.shutter} • ISO ${photo.iso}</strong></div>
+          <div><span class="text-slate-400 block text-[10px]">GPS COORDS</span><strong class="text-slate-800">${photo.coords}</strong></div>
+          <div><span class="text-slate-400 block text-[10px]">PERCEPTUAL HASH</span><strong class="text-blue-700">${photo.phash}</strong></div>
+        `;
+
+        document.getElementById('photoInspectorModal').classList.remove('hidden');
+      }
+
+      function renderInspectorTags(photo) {
+        const listEl = document.getElementById('inspectorTagsList');
+        if (!listEl) return;
+        listEl.innerHTML = (photo.tags || []).map(t => `
+          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-800 border border-blue-200">
+            #${t}
+            <button type="button" data-remove-tag="${t}" class="text-blue-400 hover:text-blue-800 font-bold">×</button>
+          </span>
+        `).join('');
+      }
+
+      // Switch Primary View
+      function switchView(viewName) {
+        state.activeView = viewName;
+        document.querySelectorAll('.workspace-view').forEach(sec => {
+          sec.classList.toggle('hidden', sec.id !== `view-${viewName}`);
+        });
+        document.querySelectorAll('.nav-view-btn').forEach(btn => {
+          const active = btn.getAttribute('data-nav-view') === viewName;
+          btn.className = active
+            ? 'nav-view-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold bg-blue-50 text-blue-700 border border-blue-200/80 transition'
+            : 'nav-view-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-100/80 border border-transparent transition';
+        });
+
+        // Close mobile drawer if open
+        document.getElementById('mainSidebar').classList.add('-translate-x-full');
+        document.getElementById('mobileSidebarBackdrop').classList.add('hidden');
+
+        if (viewName === 'sorter') {
+          renderSmartRules();
+          setTimeout(updateCharts, 60);
+        } else if (viewName === 'people') {
+          renderPeopleClusters();
+        } else if (viewName === 'cleaner') {
+          renderCleanerView();
+        } else if (viewName === 'map') {
+          renderMapView();
+        } else if (viewName === 'neondb') {
+          runLiveSqlQuery();
+        } else {
+          renderGallery();
+        }
+      }
+
+      // Simulate AI Auto-Sort Batch Pipeline
+      let sortTimer = null;
+      function triggerAiAutoSortPipeline() {
+        const banner = document.getElementById('aiSortingBanner');
+        const bar = document.getElementById('aiSortingBar');
+        const pct = document.getElementById('aiSortingPercent');
+        const stepTitle = document.getElementById('aiSortingStepTitle');
+        const stepSub = document.getElementById('aiSortingStepSub');
+
+        if (sortTimer) clearInterval(sortTimer);
+        banner.classList.remove('hidden');
+        let progress = 0;
+
+        const templates = [
+          {
+            title: `Dolomites Sunset Ridge #${state.chunkCounter}`,
+            src: 'assets/photos/alpine_reflection.jpg',
+            category: 'Nature & Alps',
+            location: 'Zermatt, Swiss Alps',
+            coords: '45.9765° N, 7.6588° E',
+            camera: 'Sony A7R V',
+            tags: ['alps', 'sunset', 'ai-sorted', 'hdr', 'glacier']
+          },
+          {
+            title: `Kyoto Cherry Blossom Path #${state.chunkCounter}`,
+            src: 'assets/photos/sakura_detail.jpg',
+            category: 'Travel & Architecture',
+            location: 'Kyoto, Japan',
+            coords: '34.9950° N, 135.7851° E',
+            camera: 'Nikon Z8',
+            tags: ['kyoto', 'sakura', 'spring', 'ai-sorted']
+          }
+        ];
+
+        sortTimer = setInterval(() => {
+          progress += 20;
+          if (progress > 100) progress = 100;
+          bar.style.width = `${progress}%`;
+          pct.textContent = `${progress}%`;
+
+          if (progress === 20) {
+            stepTitle.textContent = 'Step 1/4: Extracting EXIF & GPS Telemetry...';
+            stepSub.textContent = 'Reading camera body, lens aperture, focal length, and WGS84 coordinates.';
+          } else if (progress === 40) {
+            stepTitle.textContent = 'Step 2/4: Generating 512-d CLIP Semantic Embeddings...';
+            stepSub.textContent = 'Classifying scene aesthetics, dominant color swatches, and facial landmarks.';
+          } else if (progress === 60) {
+            stepTitle.textContent = 'Step 3/4: Computing 64-bit Perceptual Hash (pHash) & Laplacian Sharpness...';
+            stepSub.textContent = 'Checking Hamming distance against existing rows to prevent duplicate clutter.';
+          } else if (progress === 80) {
+            stepTitle.textContent = 'Step 4/4: Committing Batch via @neondatabase/serverless...';
+            stepSub.textContent = 'Executing INSERT INTO photos ... ON CONFLICT DO UPDATE in us-east-2 pool.';
+          } else if (progress >= 100) {
+            clearInterval(sortTimer);
+            sortTimer = null;
+            const pick = templates[state.chunkCounter % templates.length];
+            state.chunkCounter += 1;
+            const newPhoto = {
+              id: 'ps-' + (200 + state.photos.length + 1),
+              filename: `AI_CHUNK_${1000 + state.photos.length}.jpg`,
+              title: pick.title,
+              src: pick.src,
+              category: pick.category,
+              personId: null,
+              capturedAt: '2026-10-29 21:35',
+              location: pick.location,
+              coords: pick.coords,
+              camera: pick.camera,
+              lens: 'FE 35mm F1.4 GM',
+              aperture: 'f/2.8',
+              shutter: '1/500s',
+              iso: 100,
+              sizeMb: 5.2,
+              confidence: 99.2,
+              aesthetic: 9.6,
+              sharpness: 97.3,
+              phash: 'e491a032c87129f' + state.chunkCounter,
+              isDuplicate: false,
+              isBlurry: false,
+              isFavorite: true,
+              selected: false,
+              colors: ['#2563EB', '#10B981', '#F59E0B', '#F8FAFC'],
+              tags: pick.tags,
+              caption: 'Auto-imported and classified by PhotoSorter Neural Vision Pipeline and committed to NeonDB.'
+            };
+            state.photos.unshift(newPhoto);
+            persistState();
+            renderAll();
+            setTimeout(() => {
+              banner.classList.add('hidden');
+            }, 900);
+            showToast(
+              'AI Auto-Sort Complete',
+              `Sorted "${newPhoto.title}" into ${newPhoto.category} and synced to NeonDB (13ms).`,
+              'success'
+            );
+          }
+        }, 220);
+      }
+
+      // Render All Active Views & Telemetry
+      function renderAll() {
+        renderKpisAndCounts();
+        renderGallery();
+        renderSmartRules();
+        renderPeopleClusters();
+        renderCleanerView();
+        renderMapView();
+      }
+
+      // Setup Event Listeners & Delegation
+      function initEvents() {
+        // Mobile Drawer Toggle
+        document.getElementById('btnMobileMenu').addEventListener('click', () => {
+          document.getElementById('mainSidebar').classList.remove('-translate-x-full');
+          document.getElementById('mobileSidebarBackdrop').classList.remove('hidden');
+        });
+        document.getElementById('btnCloseMobileMenu').addEventListener('click', () => {
+          document.getElementById('mainSidebar').classList.add('-translate-x-full');
+          document.getElementById('mobileSidebarBackdrop').classList.add('hidden');
+        });
+        document.getElementById('mobileSidebarBackdrop').addEventListener('click', () => {
+          document.getElementById('mainSidebar').classList.add('-translate-x-full');
+          document.getElementById('mobileSidebarBackdrop').classList.add('hidden');
+        });
+
+        // Brand Home button
+        document.getElementById('btnBrandHome').addEventListener('click', () => {
+          state.selectedCategory = 'all';
+          state.selectedPersonId = null;
+          state.searchQuery = '';
+          document.getElementById('globalSearchInput').value = '';
+          document.getElementById('mobileSearchInput').value = '';
+          switchView('all');
+        });
+
+        // Primary Sidebar View Buttons
+        document.querySelectorAll('.nav-view-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const v = btn.getAttribute('data-nav-view');
+            if (v) switchView(v);
+          });
+        });
+
+        // Sidebar Smart Album Category Buttons
+        document.querySelectorAll('.sidebar-cat-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const cat = btn.getAttribute('data-sidebar-cat');
+            state.selectedCategory = cat || 'all';
+            state.selectedPersonId = null;
+            switchView('all');
+          });
+        });
+        document.getElementById('btnResetCategorySidebar').addEventListener('click', () => {
+          state.selectedCategory = 'all';
+          state.selectedPersonId = null;
+          switchView('all');
+        });
+
+        // Category Filter Pills in Gallery
+        document.querySelectorAll('.cat-pill').forEach(btn => {
+          btn.addEventListener('click', () => {
+            state.selectedCategory = btn.getAttribute('data-cat') || 'all';
+            renderGallery();
+          });
+        });
+
+        // Search inputs (Desktop & Mobile)
+        const globalSearch = document.getElementById('globalSearchInput');
+        const mobileSearch = document.getElementById('mobileSearchInput');
+        const clearBtn = document.getElementById('btnClearSearch');
+
+        function handleSearchInput(val) {
+          state.searchQuery = val;
+          globalSearch.value = val;
+          mobileSearch.value = val;
+          clearBtn.classList.toggle('hidden', !val);
+          if (state.activeView !== 'all') switchView('all');
+          else renderGallery();
+        }
+        globalSearch.addEventListener('input', e => handleSearchInput(e.target.value));
+        mobileSearch.addEventListener('input', e => handleSearchInput(e.target.value));
+        clearBtn.addEventListener('click', () => handleSearchInput(''));
+
+        // Clear Active Filter Chip
+        document.getElementById('btnClearActiveFilter').addEventListener('click', () => {
+          state.selectedCategory = 'all';
+          state.selectedPersonId = null;
+          handleSearchInput('');
+        });
+
+        // Sort Order Select
+        document.getElementById('sortOrderSelect').addEventListener('change', e => {
+          state.sortBy = e.target.value;
+          renderGallery();
+        });
+
+        // Grid Density Buttons
+        const btnGridComfortable = document.getElementById('btnGridComfortable');
+        const btnGridCompact = document.getElementById('btnGridCompact');
+        const btnGridList = document.getElementById('btnGridList');
+        function setDensity(mode) {
+          state.gridDensity = mode;
+          [
+            [btnGridComfortable, 'comfortable'],
+            [btnGridCompact, 'compact'],
+            [btnGridList, 'list']
+          ].forEach(([b, m]) => {
+            b.className = mode === m
+              ? 'px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-slate-800 shadow-2xs transition'
+              : 'px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition';
+          });
+          renderGallery();
+        }
+        btnGridComfortable.addEventListener('click', () => setDensity('comfortable'));
+        btnGridCompact.addEventListener('click', () => setDensity('compact'));
+        btnGridList.addEventListener('click', () => setDensity('list'));
+
+        // Batch Actions
+        document.getElementById('btnSelectAllPhotos').addEventListener('click', () => {
+          const visible = getFilteredPhotos();
+          const allSelected = visible.every(p => p.selected);
+          visible.forEach(p => { p.selected = !allSelected; });
+          renderGallery();
+          showToast(
+            !allSelected ? 'Selected Visible Photos' : 'Cleared Selection',
+            `${visible.length} photos updated.`,
+            'info'
+          );
+        });
+
+        document.getElementById('btnBatchFavorite').addEventListener('click', () => {
+          const selected = state.photos.filter(p => p.selected);
+          const targets = selected.length > 0 ? selected : getFilteredPhotos().slice(0, 3);
+          targets.forEach(p => { p.isFavorite = true; });
+          persistState();
+          renderAll();
+          showToast('Starred Favorites', `Committed ${targets.length} favorite flags to NeonDB.`, 'success');
+        });
+
+        document.getElementById('btnExportMetadataJson').addEventListener('click', () => {
+          const json = JSON.stringify(getFilteredPhotos(), null, 2);
+          copyTextToClipboard(json, 'Photo Catalog JSON Snapshot');
+        });
+
+        // AI Auto-Sort Buttons
+        document.getElementById('btnRunAiAutoSort').addEventListener('click', triggerAiAutoSortPipeline);
+        document.getElementById('btnSorterTriggerBatch').addEventListener('click', triggerAiAutoSortPipeline);
+
+        // Upload / Import Modal
+        const uploadModal = document.getElementById('uploadModal');
+        document.getElementById('btnOpenUploadModal').addEventListener('click', () => {
+          uploadModal.classList.remove('hidden');
+        });
+        document.getElementById('btnCloseUploadModal').addEventListener('click', () => {
+          uploadModal.classList.add('hidden');
+        });
+        document.getElementById('btnCancelUploadModal').addEventListener('click', () => {
+          uploadModal.classList.add('hidden');
+        });
+        document.getElementById('btnModalSimulateChunk').addEventListener('click', () => {
+          uploadModal.classList.add('hidden');
+          triggerAiAutoSortPipeline();
+        });
+
+        // Real Local File Upload Handler
+        document.getElementById('fileUploadInput').addEventListener('change', e => {
+          const files = Array.from(e.target.files || []);
+          if (!files.length) return;
+          uploadModal.classList.add('hidden');
+
+          files.forEach((file, idx) => {
+            const reader = new FileReader();
+            reader.onload = ev => {
+              const newPhoto = {
+                id: 'ps-local-' + Date.now() + '-' + idx,
+                filename: file.name,
+                title: file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '),
+                src: ev.target.result,
+                category: 'Nature & Alps',
+                personId: null,
+                capturedAt: '2026-10-29 21:36',
+                location: 'Uploaded via Browser',
+                coords: '37.7749° N, 122.4194° W',
+                camera: 'Local Device Upload',
+                lens: '24mm f/1.8',
+                aperture: 'f/1.8',
+                shutter: '1/250s',
+                iso: 100,
+                sizeMb: Number((file.size / (1024 * 1024) || 3.4).toFixed(1)),
+                confidence: 98.6,
+                aesthetic: 9.4,
+                sharpness: 96.2,
+                phash: 'a82f91c044e120b' + idx,
+                isDuplicate: false,
+                isBlurry: false,
+                isFavorite: true,
+                selected: false,
+                colors: ['#2563EB', '#10B981', '#F59E0B'],
+                tags: ['uploaded', 'ai-sorted', 'hd'],
+                caption: `Uploaded file "${file.name}" analyzed by PhotoSorter AI and indexed in NeonDB.`
+              };
+              state.photos.unshift(newPhoto);
+              persistState();
+              renderAll();
+            };
+            reader.readAsDataURL(file);
+          });
+          showToast('Imported Local Photos', `${files.length} photo(s) classified and added to gallery.`, 'success');
+        });
+
+        // Open NeonDB Studio Drawer/View
+        document.getElementById('btnOpenNeonDrawer').addEventListener('click', () => switchView('neondb'));
+        document.getElementById('btnTopQuickPing').addEventListener('click', () => {
+          const ms = Math.floor(10 + Math.random() * 7);
+          document.getElementById('topSyncTimestamp').textContent = `Pool Latency: ${ms}ms • Verified OK`;
+          document.getElementById('kpiNeonLatency').textContent = `${ms} ms`;
+          showToast('NeonDB Pool Verified', `Connected to ep-bright-meadow-a54321-pooler (${ms}ms).`, 'success');
+        });
+        document.getElementById('btnSidebarSyncNow').addEventListener('click', () => {
+          persistState();
+          const ms = Math.floor(11 + Math.random() * 6);
+          document.getElementById('topSyncTimestamp').textContent = `Pool Latency: ${ms}ms • Synced just now`;
+          showToast('State Synced to NeonDB', `All ${state.photos.length} photo records committed in ${ms}ms.`, 'success');
+        });
+
+        // AI Sorter Sliders
+        document.getElementById('sliderConfidence').addEventListener('input', e => {
+          document.getElementById('valSliderConfidence').textContent = `${e.target.value}%`;
+        });
+        document.getElementById('sliderSharpness').addEventListener('input', e => {
+          document.getElementById('valSliderSharpness').textContent = `${Number(e.target.value).toFixed(1)}`;
+        });
+        document.getElementById('sliderPhash').addEventListener('input', e => {
+          document.getElementById('valSliderPhash').textContent = `${e.target.value}%`;
+        });
+
+        // New Smart Rule Modal
+        const newRuleModal = document.getElementById('newRuleModal');
+        document.getElementById('btnOpenNewRuleModal').addEventListener('click', () => {
+          newRuleModal.classList.remove('hidden');
+        });
+        document.getElementById('btnCloseNewRuleModal').addEventListener('click', () => {
+          newRuleModal.classList.add('hidden');
+        });
+        document.getElementById('btnSaveNewRule').addEventListener('click', () => {
+          const name = document.getElementById('inputRuleName').value.trim() || 'Custom High-Aesthetic Rule';
+          const cond = document.getElementById('inputRuleCondition').value.trim() || 'aesthetic_score >= 9.5';
+          const album = document.getElementById('inputRuleTargetAlbum').value;
+          state.rules.unshift({
+            id: 'rule-' + Date.now(),
+            name,
+            condition: cond,
+            targetAlbum: album,
+            active: true,
+            matches: state.photos.filter(p => p.category === album).length
+          });
+          newRuleModal.classList.add('hidden');
+          renderSmartRules();
+          showToast('Created Smart Rule', `Rule "${name}" saved to NeonDB smart_rules.`, 'success');
+        });
+
+        // Duplicate & Blur Cleaner Auto-Resolve All
+        document.getElementById('btnResolveAllDuplicates').addEventListener('click', () => {
+          const flagged = state.photos.filter(p => p.isDuplicate || p.isBlurry);
+          if (flagged.length === 0) {
+            showToast('Library Already Clean', 'No duplicate or blurry photos remain.', 'info');
+            return;
+          }
+          const savedMb = flagged.reduce((acc, p) => acc + p.sizeMb, 0);
+          state.reclaimedMb += savedMb;
+          state.photos = state.photos.filter(p => !p.isDuplicate && !p.isBlurry);
+          persistState();
+          renderAll();
+          showToast('Cleaned All Flagged Photos', `Removed ${flagged.length} redundant/blurry shots and reclaimed ${savedMb.toFixed(1)} MB.`, 'warn');
+        });
+
+        // Map Pins
+        document.querySelectorAll('.map-pin-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            state.selectedMapLocation = btn.getAttribute('data-map-loc');
+            renderMapView();
+          });
+        });
+        document.getElementById('btnMapShowAllLocations').addEventListener('click', () => {
+          state.selectedMapLocation = null;
+          renderMapView();
+        });
+
+        // NeonDB Studio Controls
+        document.getElementById('btnTestNeonConnection').addEventListener('click', () => {
+          runLiveSqlQuery();
+          showToast('NeonDB Health Check Passed', 'PostgreSQL 16.4 + pgvector 0.7.4 active on us-east-2.', 'success');
+        });
+        document.getElementById('btnCopyConnString').addEventListener('click', () => {
+          copyTextToClipboard(document.getElementById('neonConnectionStringInput').value, 'DATABASE_URL');
+        });
+        document.getElementById('btnExecuteSql').addEventListener('click', () => {
+          runLiveSqlQuery();
+          showToast('Executed SQL Query', 'Fetched live rows from PhotoSorter catalog.', 'success');
+        });
+        document.querySelectorAll('.sql-preset-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            runLiveSqlQuery(btn.getAttribute('data-sql-preset'));
+          });
+        });
+        document.getElementById('btnCopySchemaSql').addEventListener('click', () => {
+          copyTextToClipboard(document.getElementById('schemaSqlCodeBlock').textContent, 'db/schema.sql');
+        });
+        document.getElementById('btnCopyServerlessJs').addEventListener('click', () => {
+          copyTextToClipboard(document.getElementById('serverlessJsCodeBlock').textContent, 'netlify/functions/photos.js');
+        });
+
+        // Inspector Modal Controls
+        document.getElementById('btnCloseInspectorModal').addEventListener('click', () => {
+          document.getElementById('photoInspectorModal').classList.add('hidden');
+        });
+        document.getElementById('btnInspectorPrev').addEventListener('click', () => {
+          const list = getFilteredPhotos();
+          const idx = list.findIndex(p => p.id === state.inspectorPhotoId);
+          if (idx > 0) openInspectorModal(list[idx - 1].id);
+          else if (list.length) openInspectorModal(list[list.length - 1].id);
+        });
+        document.getElementById('btnInspectorNext').addEventListener('click', () => {
+          const list = getFilteredPhotos();
+          const idx = list.findIndex(p => p.id === state.inspectorPhotoId);
+          if (idx >= 0 && idx < list.length - 1) openInspectorModal(list[idx + 1].id);
+          else if (list.length) openInspectorModal(list[0].id);
+        });
+        document.getElementById('inspectorEditCategory').addEventListener('change', e => {
+          const photo = state.photos.find(p => p.id === state.inspectorPhotoId);
+          if (photo) {
+            photo.category = e.target.value;
+            document.getElementById('inspectorCategoryBadge').textContent = photo.category;
+            persistState();
+            renderAll();
+            showToast('Updated Category', `Moved "${photo.title}" to ${photo.category} in NeonDB.`, 'success');
+          }
+        });
+        document.getElementById('btnInspectorToggleFav').addEventListener('click', () => {
+          const photo = state.photos.find(p => p.id === state.inspectorPhotoId);
+          if (photo) {
+            photo.isFavorite = !photo.isFavorite;
+            persistState();
+            openInspectorModal(photo.id);
+            renderAll();
+          }
+        });
+        document.getElementById('btnInspectorDeletePhoto').addEventListener('click', () => {
+          const photo = state.photos.find(p => p.id === state.inspectorPhotoId);
+          if (!photo) return;
+          state.reclaimedMb += photo.sizeMb;
+          state.photos = state.photos.filter(p => p.id !== photo.id);
+          document.getElementById('photoInspectorModal').classList.add('hidden');
+          persistState();
+          renderAll();
+          showToast('Deleted Photo Row', `Removed ${photo.filename} and reclaimed ${photo.sizeMb} MB.`, 'warn');
+        });
+        document.getElementById('btnInspectorAddTag').addEventListener('click', () => {
+          const input = document.getElementById('inspectorNewTagInput');
+          const raw = input.value.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
+          const photo = state.photos.find(p => p.id === state.inspectorPhotoId);
+          if (raw && photo) {
+            if (!photo.tags.includes(raw)) photo.tags.push(raw);
+            input.value = '';
+            persistState();
+            renderInspectorTags(photo);
+            renderGallery();
+            showToast('Added Semantic Tag', `Appended #${raw} to NeonDB ai_tags array.`, 'success');
+          }
+        });
+
+        // Delegated Clicks for Dynamic Cards, Tags, People, Cleaner & Rules
+        document.body.addEventListener('click', e => {
+          const openBtn = e.target.closest('[data-open-inspector]');
+          if (openBtn) {
+            openInspectorModal(openBtn.getAttribute('data-open-inspector'));
+            return;
+          }
+
+          const favBtn = e.target.closest('[data-toggle-fav]');
+          if (favBtn) {
+            const id = favBtn.getAttribute('data-toggle-fav');
+            const p = state.photos.find(x => x.id === id);
+            if (p) {
+              p.isFavorite = !p.isFavorite;
+              persistState();
+              renderAll();
+            }
+            return;
+          }
+
+          const selBtn = e.target.closest('[data-toggle-select]');
+          if (selBtn) {
+            const id = selBtn.getAttribute('data-toggle-select');
+            const p = state.photos.find(x => x.id === id);
+            if (p) {
+              p.selected = !p.selected;
+              renderGallery();
+            }
+            return;
+          }
+
+          const tagBtn = e.target.closest('[data-tag-filter]');
+          if (tagBtn) {
+            const tag = tagBtn.getAttribute('data-tag-filter');
+            handleSearchInput(tag || '');
+            return;
+          }
+
+          const removeTagBtn = e.target.closest('[data-remove-tag]');
+          if (removeTagBtn) {
+            const tag = removeTagBtn.getAttribute('data-remove-tag');
+            const photo = state.photos.find(p => p.id === state.inspectorPhotoId);
+            if (photo) {
+              photo.tags = photo.tags.filter(t => t !== tag);
+              persistState();
+              renderInspectorTags(photo);
+              renderGallery();
+            }
+            return;
+          }
+
+          const personBtn = e.target.closest('[data-filter-person]');
+          if (personBtn) {
+            state.selectedPersonId = personBtn.getAttribute('data-filter-person');
+            state.selectedCategory = 'all';
+            switchView('all');
+            return;
+          }
+
+          const cleanBtn = e.target.closest('[data-clean-photo]');
+          if (cleanBtn) {
+            const id = cleanBtn.getAttribute('data-clean-photo');
+            const p = state.photos.find(x => x.id === id);
+            if (p) {
+              state.reclaimedMb += p.sizeMb;
+              state.photos = state.photos.filter(x => x.id !== id);
+              persistState();
+              renderAll();
+              showToast('Cleaned Redundant Photo', `Reclaimed ${p.sizeMb} MB and updated NeonDB.`, 'warn');
+            }
+            return;
+          }
+
+          const ruleBtn = e.target.closest('[data-toggle-rule]');
+          if (ruleBtn) {
+            const id = ruleBtn.getAttribute('data-toggle-rule');
+            const r = state.rules.find(x => x.id === id);
+            if (r) {
+              r.active = !r.active;
+              renderSmartRules();
+              showToast('Updated Smart Rule', `${r.name} is now ${r.active ? 'Active' : 'Paused'}.`, 'info');
+            }
+            return;
+          }
+
+          const resetBtn = e.target.closest('[data-action="reset-filters"]');
+          if (resetBtn) {
+            state.selectedCategory = 'all';
+            state.selectedPersonId = null;
+            handleSearchInput('');
+          }
+        });
+      }
+
+      // Initialize App on Load
+      window.addEventListener('DOMContentLoaded', () => {
+        initEvents();
+        renderAll();
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/api/photos/*"
+  to = "/.netlify/functions/photos/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/photos"
+  to = "/.netlify/functions/photos"
+  status = 200
+
+[[redirects]]
+  from = "/api/db-health"
+  to = "/.netlify/functions/db-health"
+  status = 200
+
+[[headers]]
+  for = "/favicon.svg"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+    Content-Type = "image/svg+xml"
